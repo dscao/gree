@@ -1,6 +1,7 @@
 # gree
 增强配置选项的格力空调homeassistant集成
 此版本请使用homeassistant 2023.6以后的版本
+暂示发布，代码部分基本完成，待测试一段时间后再发布。
 
 
 修改自： [HomeAssistant-GreeClimateComponent](https://github.com/RobHofmann/HomeAssistant-GreeClimateComponent) 
