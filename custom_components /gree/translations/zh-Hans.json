@@ -1,0 +1,48 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "设备已经配置"
+        },
+        "error": {
+            "cannot_connect": "连接失败",
+            "invalid_auth": "认证错误",
+            "unknown": "未知错误"
+        },
+        "step": {
+            "user": {
+                "title":"格力空调",
+                "data": {
+                    "host": "主机地址（空调的IP）",
+                    "port": "端口，默认7000，一般情况不要修改",
+					"target_temp_step": "温度控制步长"									
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "user":{
+                "data": {
+					"temp_sensor": "外部温度传感器实体ID，填写“None”则使用空调内置温度传感器",
+					"update_interval_seconds": "刷新间隔时间(2-60 秒)",
+					"encryption_key": "encryption key（留空或默认为系统自动计算的结果，尽量不要手动修改。）",
+					"uid": "UID（0为自动，尽量不要手动修改。）",
+                    "switchs": "控制开关"
+                },
+                "description": "设置设备选项"
+            }
+        }
+    },
+	"selector": {
+		"switchs": {
+			"options": {
+				"Lig": "面板指示灯",
+				"Quiet": "静音模式",
+				"Air": "清新空气",
+				"Blo": "外部风扇",
+				"Health": "健康模式",
+				"aux_heat": "辅热"
+			}
+		}
+	}
+}
