@@ -4,9 +4,9 @@
 
 
 
-协议算法源自： [HomeAssistant-GreeClimateComponent](https://github.com/RobHofmann/HomeAssistant-GreeClimateComponent) 
+协议算法参考： [HomeAssistant-GreeClimateComponent](https://github.com/RobHofmann/HomeAssistant-GreeClimateComponent) 
 
-参考： [greeclimate](https://github.com/cmroche/greeclimate)
+另参考： [greeclimate](https://github.com/cmroche/greeclimate)
 
 
 
