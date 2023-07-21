@@ -46,6 +46,7 @@ from .const import (
     CONF_ENCRYPTION_KEY, 
     CONF_UID,
     CONF_AUX_HEAT,
+    CONF_VERSION,
     )
 from configparser import ConfigParser
 from Crypto.Cipher import AES
@@ -58,6 +59,18 @@ DEFAULT_PORT = 7000
 DEFAULT_TIMEOUT = 10
 DEFAULT_TARGET_TEMP_STEP = 1
 GENERIC_GREE_DEVICE_KEY = "a3K8Bx%2r8Y7#xDh"
+
+# from the remote control and gree app
+TEMP_MIN = 8
+TEMP_MAX = 30
+TEMP_OFFSET = 40
+TEMP_MIN_F = 46
+TEMP_MAX_F = 86
+
+HUMIDITY_MIN = 30
+HUMIDITY_MAX = 80
+
+
 
 @config_entries.HANDLERS.register(DOMAIN)
 class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -107,9 +120,41 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         jsonPayloadToSend = '{"t": "scan"}'
         return self.FetchResult(cipher, host, port, timeout_s, jsonPayloadToSend)
         
-    # def GetDeviceMAC(self, bcast_iface):
-        # await self.send({"t": "scan"}, (str(bcast_iface), 7000))
+    def GreeGetValues(self, propertyNames):
+        self.CIPHER = AES.new(self._encryption_key.encode('utf-8'), AES.MODE_ECB) 
+        jsonPayloadToSend = '{"cid":"app","i":0,"pack":"' + base64.b64encode(self.CIPHER.encrypt(self.Pad('{"cols":' + simplejson.dumps(propertyNames) + ',"mac":"' + str(self._mac_addr) + '","t":"status"}').encode("utf8"))).decode('utf-8') + '","t":"pack","tcid":"' + str(self._mac_addr) + '","uid":{}'.format(0) + '}'
+        return self.FetchResult(self.CIPHER, self._host, self._port, DEFAULT_TIMEOUT, jsonPayloadToSend)
+         
+        
+    def request_version(self):
+        """Request the firmware version from the device."""
+        ret = self.GreeGetValues(["hid","TemSen"])
+        _LOGGER.debug(ret)
+        hid = ret.get("dat")[0]
+        
+        # Ex: hid = 362001000762+U-CS532AE(LT)V3.31.bin
+        #          ['362001060297+U-CS532AF(MTK)V4.bin']
+        if hid:
+            match = re.search(r"(?<=V)([\d.]+)\.bin$", hid)
+            version = match and match.group(1)
+            _LOGGER.debug("version: %s", version)
+            
 
+            # Special case firmwares ...
+            # if (
+            #     self.hid.endswith("_JDV1.bin")
+            #     or self.hid.endswith("362001000967V2.bin")
+            #     or re.match("^.*\(MTK\)V[1-3]{1}\.bin", self.hid)  # (MTK)V[1-3].bin
+            # ):
+            #     self.version = "4.0" 
+            
+        temp = ret.get("dat")[1]
+        if temp and temp <= TEMP_OFFSET:
+            version = "4.0"
+            
+        return version
+
+        
     async def async_step_user(self, user_input={}):
         self._errors = {}
         if user_input is not None:
@@ -120,16 +165,19 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             
             self._host = host
             self._port = port
-            self._timeout = DEFAULT_TIMEOUT
+            self._version = ""
             
-            self._deviceinfo = self.GetDeviceInfo(self._host, self._port, self._timeout)
+            self._deviceinfo = self.GetDeviceInfo(self._host, self._port, DEFAULT_TIMEOUT)
             _LOGGER.debug(self._deviceinfo)
 
             self._mac_addr = self._deviceinfo["mac"]            
             
-            self._encryption_key = self.GetDeviceKey(self._mac_addr, self._host, self._port, self._timeout)
+            self._encryption_key = self.GetDeviceKey(self._mac_addr, self._host, self._port, DEFAULT_TIMEOUT)
             _LOGGER.info('Fetched device encrytion key: %s' % str(self._encryption_key))
-
+                   
+            self._version = self.request_version()
+            _LOGGER.info('Fetched device version: %s' % str(self._version))            
+            
             if not self._encryption_key:
                 self._errors["base"] = "unkown"
                 return await self._show_config_form(user_input)
@@ -137,7 +185,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.debug(
                 "gree successfully, save data for gree: %s",
                 host,
-            )
+            )           
             await self.async_set_unique_id(f"climate.gree-{self._mac_addr}")
             self._abort_if_unique_id_configured()
 
@@ -146,6 +194,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             config_data[CONF_MAC] = self._mac_addr
             config_data[CONF_TARGET_TEMP_STEP] = target_temp_step
             config_data[CONF_ENCRYPTION_KEY] = str(self._encryption_key)
+            config_data[CONF_VERSION] = self._version
             return self.async_create_entry(title=f"gree-{host}", data=config_data)
 
         return await self._show_config_form(user_input)
@@ -193,15 +242,15 @@ class OptionsFlow(config_entries.OptionsFlow):
                         CONF_ENCRYPTION_KEY,
                         default=self.config_entry.options.get(CONF_ENCRYPTION_KEY, self.config_entry.data.get(CONF_ENCRYPTION_KEY))
                     ): vol.All(vol.Coerce(str)),
-                    vol.Optional(CONF_SWITCHS, default=self.config_entry.options.get(CONF_SWITCHS)): SelectSelector(
+                    vol.Optional(CONF_SWITCHS, default=self.config_entry.options.get(CONF_SWITCHS,[])): SelectSelector(
                             SelectSelectorConfig(
                                 options=[
-                                    {"value": "Lig", "label": "Panel Light"},
-                                    {"value": "Quiet", "label": "Quiet"},
+                                    {"value": "Lig", "label": "Panel Light"},                                    
                                     {"value": "Air", "label": "Fresh Air"},
                                     {"value": "Blo", "label": "XFan"},
                                     {"value": "Health", "label": "Health mode"},
                                     # {"value": CONF_AUX_HEAT, "label": CONF_AUX_HEAT},
+                                    # {"value": "Quiet", "label": "Quiet"},
                                 ], 
                                 multiple=True,translation_key=CONF_SWITCHS
                             )

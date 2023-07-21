@@ -81,6 +81,7 @@ from .const import (
     CONF_AUX_HEAT,
     FAN_MEDIUM_HIGH,
     FAN_MEDIUM_LOW,
+    CONF_VERSION,
 )
 from homeassistant.exceptions import ConfigEntryNotReady
 
@@ -193,7 +194,7 @@ TEMP_MAX = 30
 TEMP_OFFSET = 40
 TEMP_MIN_F = 46
 TEMP_MAX_F = 86
-
+TEMP_TABLE = [generate_temperature_record(x) for x in range(TEMP_MIN_F, TEMP_MAX_F + 1)]
 HUMIDITY_MIN = 30
 HUMIDITY_MAX = 80
 
@@ -201,7 +202,6 @@ HUMIDITY_MAX = 80
 PRESET_MODES = [
     PRESET_ECO,  # Power saving mode
     PRESET_AWAY,  # Steady heat, or 8C mode on gree units
-    PRESET_BOOST,  # Turbo mode
     PRESET_NONE,  # Default operating mode
     PRESET_SLEEP,  # Sleep mode
 ]
@@ -223,18 +223,19 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     target_temp_step = config_entry.data[CONF_TARGET_TEMP_STEP]
     
     encryption_key = config_entry.options.get(CONF_ENCRYPTION_KEY, config_entry.data[CONF_ENCRYPTION_KEY]).encode('utf-8')
+    version = config_entry.data.get(CONF_VERSION, 0)
     uid = config_entry.options.get(CONF_UID, 0)    
     temp_sensor_entity_id = config_entry.options.get(CONF_TEMP_SENSOR)
     climates = []
     
-    climates.append(GreeClimate(hass, coordinator, mac, host, port, target_temp_step, temp_sensor_entity_id, encryption_key, uid))
+    climates.append(GreeClimate(hass, coordinator, mac, host, port, target_temp_step, temp_sensor_entity_id, encryption_key, version, uid))
     async_add_entities(climates, False)    
          
             
 
 class GreeClimate(ClimateEntity):
     _attr_has_entity_name = True
-    
+    _attr_translation_key = "gree_ac"
     _attr_precision = PRECISION_WHOLE
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
@@ -243,7 +244,7 @@ class GreeClimate(ClimateEntity):
         | ClimateEntityFeature.SWING_MODE
     )
     
-    def __init__(self, hass, coordinator, mac, host, port, target_temp_step, temp_sensor_entity_id, encryption_key, uid):
+    def __init__(self, hass, coordinator, mac, host, port, target_temp_step, temp_sensor_entity_id, encryption_key, version, uid):
         """Initialize."""
         _LOGGER.info('Initialize the GREE climate device')
         super().__init__()
@@ -251,18 +252,12 @@ class GreeClimate(ClimateEntity):
         self._host = host
         self._port = port
         self._encryption_key = encryption_key
+        self._version = version
         self._uid = uid
         self._mac_addr = mac
         self._unique_id = f"climate.gree-{self._mac_addr}"
         self._name = None #f"{DEFAULT_NAME}-{host}"
         self._state = None
-        # self._attr_device_info = {
-            # "identifiers": {(DOMAIN, host)},
-            # "name": f"Gree AC {host}",
-            # "manufacturer": "Gree",
-            # "model": "AC",
-        # }
-
 
         self._attr_device_class = "climate"
         self._attr_icon = "mdi:air-conditioner"
@@ -286,12 +281,24 @@ class GreeClimate(ClimateEntity):
         self._current_sleep = None
         self._current_eightdegheat = None
         self._current_air = None
-
-        timeout_s = 10
-        self._fetcher = DataFetcher(self._host, self._port, self._mac_addr, timeout_s, self._uid, self._encryption_key, self._hass)
         
-        if temp_sensor_entity_id and ("sensor." in temp_sensor_entity_id) and ("temperature" in temp_sensor_entity_id):
-            _LOGGER.info('Setting up temperature sensor: ' + str(temp_sensor_entity_id))
+        self._properties = None
+
+        self._fetcher = DataFetcher(self._host, self._port, self._mac_addr, DEFAULT_TIMEOUT, self._uid, self._encryption_key, self._hass)
+        
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, host)},
+            "name": f"Gree AC {self._host}", 
+            "manufacturer": "gree",
+            "model": "Gree AC",
+            "sw_version": self._version,
+        }
+        
+        if temp_sensor_entity_id and ("sensor." in temp_sensor_entity_id) and ("temperature" in temp_sensor_entity_id):                    
+            state_temperature = self._hass.states.get(temp_sensor_entity_id)
+            if state_temperature is not None:
+                self._async_update_current_temp(state_temperature)
+                _LOGGER.info('安装外部传感器实体: ' + str(temp_sensor_entity_id))
             async_track_state_change(
                 hass, temp_sensor_entity_id, self._async_temp_sensor_changed)
  
@@ -311,7 +318,7 @@ class GreeClimate(ClimateEntity):
             _state = state.state
             _LOGGER.info('Current state temp_sensor: ' + _state)
             if self.represents_float(_state):
-                self._current_temperature = self.hass.config.units.temperature(
+                self._current_temperature = self._hass.config.units.temperature(
                     float(_state), unit)
                 _LOGGER.info('Current temp: ' + str(self._current_temperature))
         except ValueError as ex:
@@ -324,7 +331,17 @@ class GreeClimate(ClimateEntity):
             return True
         except ValueError:
             return False  
-            
+    
+        
+    def _convert_to_units(self, value, bit):
+        if self.coordinator.data["TemUn"] != TemperatureUnits.F.value:
+            return value
+
+        if value < TEMP_MIN or value > TEMP_MAX:
+            raise ValueError(f"Specified temperature {value} is out of range.")
+
+        f = next(t for t in TEMP_TABLE if t["temSet"] == value and t["temRec"] == bit)
+        return f["f"]    
             
     @property
     def name(self) -> str:
@@ -335,16 +352,6 @@ class GreeClimate(ClimateEntity):
     def unique_id(self) -> str:
         """Return a unique id for the device."""
         return self._unique_id
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device specific attributes."""
-        return DeviceInfo(
-            connections={(CONNECTION_NETWORK_MAC, self._mac_addr)},
-            identifiers={(DOMAIN, self._host)},
-            manufacturer="Gree",
-            name=f"Gree AC {self._host}", 
-        )
 
     @property
     def temperature_unit(self) -> str:
@@ -358,7 +365,20 @@ class GreeClimate(ClimateEntity):
     def current_temperature(self) -> float:
         """Return the reported current temperature for the device."""
         if self.coordinator.data['TemSen'] and (self._temp_sensor_entity_id == "" or self._temp_sensor_entity_id == "None" or self._temp_sensor_entity_id == None):
-            self._current_temperature = self.coordinator.data['TemSen']
+            self._current_temperature = self.coordinator.data['TemSen']            
+            prop = self.coordinator.data['TemSen']
+            bit = self.coordinator.data['TemRec']
+            if prop is not None:
+                v = self._version and int(self._version.split(".")[0])
+                try:
+                    if v == 4:
+                        return self._convert_to_units(prop, bit)
+                    elif prop != 0:
+                        return self._convert_to_units(prop - TEMP_OFFSET, bit)
+                except ValueError:
+                    logging.warning("Converting unexpected set temperature value %s", prop)
+            return self.target_temperature
+        
         return self._current_temperature
 
     @property
@@ -462,8 +482,6 @@ class GreeClimate(ClimateEntity):
             return PRESET_ECO
         if self.coordinator.data["SlpMod"]:
             return PRESET_SLEEP
-        if self.coordinator.data["Tur"]:
-            return PRESET_BOOST
         return PRESET_NONE
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
@@ -478,15 +496,15 @@ class GreeClimate(ClimateEntity):
         )
 
         if preset_mode == PRESET_AWAY:
-            await self._fetcher.SyncState({'StHt': 1, 'SvSt': 0,'Tur': 0, 'SlpMod': 0})
+            await self._fetcher.SyncState({'StHt': 1, 'SvSt': 0, 'SlpMod': 0, 'Tur': 0,'Quiet': 0})
         elif preset_mode == PRESET_ECO:
-            await self._fetcher.SyncState({'StHt': 0, 'SvSt': 1,'Tur': 0, 'SlpMod': 0})
+            await self._fetcher.SyncState({'StHt': 0, 'SvSt': 1, 'SlpMod': 0, 'Tur': 0,'Quiet': 0})
         elif preset_mode == PRESET_BOOST:
-            await self._fetcher.SyncState({'StHt': 0, 'SvSt': 0,'Tur': 1, 'SlpMod': 0})
+            await self._fetcher.SyncState({'StHt': 0, 'SvSt': 0, 'SlpMod': 0, 'Tur': 0,'Quiet': 0})
         elif preset_mode == PRESET_SLEEP:
-            await self._fetcher.SyncState({'StHt': 0, 'SvSt': 0,'Tur': 0, 'SlpMod': 1})
+            await self._fetcher.SyncState({'StHt': 0, 'SvSt': 0, 'SlpMod': 1, 'Tur': 0,'Quiet': 0})
         else:
-            await self._fetcher.SyncState({'StHt': 0, 'SvSt': 0,'Tur': 0, 'SlpMod': 0})
+            await self._fetcher.SyncState({'StHt': 0, 'SvSt': 0, 'SlpMod': 0, 'Tur': 0,'Quiet': 0})
         self.async_write_ha_state()
 
     @property
@@ -497,16 +515,22 @@ class GreeClimate(ClimateEntity):
     @property
     def fan_mode(self) -> str | None:
         """Return the current fan mode for the device."""
-        if (int(self.coordinator.data['Tur']) == 1):
-            return 'Turbo'
-        elif (int(self.coordinator.data['Quiet']) >= 1):
+        if (int(self.coordinator.data['Quiet']) >= 1):
             return 'Quiet'
-        else:        
+        elif (int(self.coordinator.data['Tur']) == 1):
+            return 'Turbo'
+        else:
             speed = self.coordinator.data["WdSpd"]
             return FAN_MODES[speed]
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new target fan mode."""
+        if fan_mode == "Quiet":
+            await self._fetcher.SyncState({'StHt': 0, 'SvSt': 0, 'SlpMod': 0, 'Tur': 0,'Quiet': 1})
+        elif fan_mode == "Turbo":
+            await self._fetcher.SyncState({'StHt': 0, 'SvSt': 0, 'SlpMod': 0, 'Tur': 1,'Quiet': 0})
+        else:
+            await self._fetcher.SyncState({'Tur': 0,'Quiet': 0})
         if fan_mode not in FAN_MODES:
             raise ValueError(f"Invalid fan mode: {fan_mode}")
         await self._fetcher.SyncState({'WdSpd': FAN_MODES.index(fan_mode)})

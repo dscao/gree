@@ -44,8 +44,6 @@ class DataFetcher:
         
         self._acOptions = { 'Pow': None, 'Mod': None, 'SetTem': None, 'WdSpd': None, 'Air': None, 'Blo': None, 'Health': None, 'SwhSlp': None, 'Lig': None, 'SwingLfRig': None, 'SwUpDn': None, 'Quiet': None, 'Tur': None, 'StHt': None, 'TemUn': None, 'HeatCoolType': None, 'TemRec': None, 'SvSt': None, 'SlpMod': None }
         self.target_temperature = None
-        self.version = None
-
 
     # Pad helper method to help us get the right string for encrypting
     def Pad(self, s):

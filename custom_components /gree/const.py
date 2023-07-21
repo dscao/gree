@@ -7,6 +7,8 @@ CONF_HOST = "host"
 CONF_PORT = "port"
 CONF_MAC = "mac"
 
+CONF_VERSION = "version"
+
 CONF_TARGET_TEMP_STEP = "target_temp_step"
 CONF_TEMP_SENSOR = "temp_sensor"
 CONF_LIGHTS = "lights"

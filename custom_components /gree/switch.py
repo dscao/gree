@@ -38,6 +38,7 @@ from .const import (
     CONF_ENCRYPTION_KEY,
     CONF_UID,
     CONF_AUX_HEAT,
+    CONF_VERSION,
 )
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.core import callback
@@ -55,6 +56,7 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
+DEFAULT_TIMEOUT = 10
     
 GREE_SWITCHES: tuple[SwitchEntityDescription, ...] = (
     SwitchEntityDescription(
@@ -62,10 +64,10 @@ GREE_SWITCHES: tuple[SwitchEntityDescription, ...] = (
         name="Panel Light",
         key="Lig",
     ),
-    SwitchEntityDescription(
-        name="Quiet",
-        key="Quiet",
-    ),
+    # SwitchEntityDescription(
+        # name="Quiet",
+        # key="Quiet",
+    # ),
     SwitchEntityDescription(
         name="Fresh Air",
         key="Air",
@@ -78,7 +80,7 @@ GREE_SWITCHES: tuple[SwitchEntityDescription, ...] = (
         icon="mdi:pine-tree",
         name="Health mode",
         key="Health",
-        entity_registry_enabled_default=False,
+        entity_registry_enabled_default=True,
     ),
 )
 SWITCH_TYPES_MAP = { description.key: description for description in GREE_SWITCHES }
@@ -91,9 +93,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     coordinator = hass.data[DOMAIN][config_entry.entry_id][COORDINATOR]
     host = config_entry.data[CONF_HOST]
     port = config_entry.data[CONF_PORT]
-    mac = config_entry.data[CONF_MAC]
+    mac = config_entry.data[CONF_MAC]    
     encryption_key = config_entry.options.get(CONF_ENCRYPTION_KEY, config_entry.data[CONF_ENCRYPTION_KEY]).encode('utf-8')
+    version = config_entry.data.get(CONF_VERSION, 0)
     uid = config_entry.options.get(CONF_UID, 0) 
+    
 
     switchs = []
     
@@ -104,17 +108,17 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         
     for switch in enabled_switchs:
         _LOGGER.debug( SWITCH_TYPES_MAP[switch])
-        switchs.append(GreeSwitch(hass, SWITCH_TYPES_MAP[switch], coordinator, host, port, mac, encryption_key, uid))
+        switchs.append(GreeSwitch(hass, SWITCH_TYPES_MAP[switch], coordinator, host, port, mac, encryption_key, uid, version))
     async_add_entities(switchs, False)
            
 
 class GreeSwitch(SwitchEntity):
     _attr_has_entity_name = True
-    def __init__(self, hass, description, coordinator, host, port, mac, encryption_key, uid):
+    def __init__(self, hass, description, coordinator, host, port, mac, encryption_key, uid, version):
         """Initialize."""
         super().__init__()
         self.entity_description = description
-        self._attr_translation_key = f"{self.entity_description.key}"
+        self._attr_translation_key = self.entity_description.key.lower()
         self.coordinator = coordinator
         self._hass = hass
         self._host = host
@@ -127,20 +131,22 @@ class GreeSwitch(SwitchEntity):
         self._change = True
         self._switchonoff = None
         self._state = None
-        # self._attr_device_info = {
-            # "identifiers": {(DOMAIN, host)},
-            # "name": f"Gree AC {host}",
-            # "manufacturer": "Gree",
-            # "model": "AC",
-        # }
-        timeout_s = 10
-        self._fetcher = DataFetcher(self._host, self._port, self._mac_addr, timeout_s, self._uid, self._encryption_key, self._hass)
+        self._version = version
+        
+        self._fetcher = DataFetcher(self._host, self._port, self._mac_addr, DEFAULT_TIMEOUT, self._uid, self._encryption_key, self._hass)
         
         self._switchonoff = self.coordinator.data[self.entity_description.key]
         
         self._is_on = self._switchonoff == 1
         self._state = "on" if self._is_on == True else "off"
-
+        
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, host)},
+            "name": f"Gree AC {self._host}", 
+            "manufacturer": "gree",
+            "model": "Gree AC",
+            "sw_version": self._version,
+        }
    
     @property
     def name(self):
@@ -150,17 +156,7 @@ class GreeSwitch(SwitchEntity):
     @property
     def unique_id(self):
         return self._unique_id
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device specific attributes."""
-        return DeviceInfo(
-            connections={(CONNECTION_NETWORK_MAC, self._mac_addr)},
-            identifiers={(DOMAIN, self._host)},
-            manufacturer="Gree",
-            name=f"Gree AC {self._host}", 
-        )
-        
+       
     @property
     def should_poll(self):
         """Return the polling requirement of the entity."""

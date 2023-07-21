@@ -37,12 +37,47 @@
 		"switchs": {
 			"options": {
 				"Lig": "面板指示灯",
-				"Quiet": "静音模式",
-				"Air": "清新空气",
-				"Blo": "外部风扇",
+				"Air": "空气净化",
+				"Blo": "X-FAN",
 				"Health": "健康模式",
 				"aux_heat": "辅热"
 			}
 		}
-	}
+	},
+    "entity": {
+		"climate": {
+			"gree_ac": {
+				"state_attributes": {
+					"fan_mode": {
+                        "state": {
+                            "medium-low": "中低风",
+                            "medium-high": "中高风",
+                            "Turbo": "强劲风",
+                            "Quiet": "静音风"
+                        }
+                    },
+                    "swing_mode": {
+                        "state": {
+                            "auto": "自动",
+                            "off": "关闭"
+                        }
+                    }
+                }
+            }
+        },
+        "switch": {			
+            "lig": {
+                "name": "面板指示灯"
+            },
+            "air": {
+                "name": "空气净化"
+            },
+            "blo": {
+                "name": "X-FAN"
+            },
+            "health": {
+                "name": "健康模式"
+            }
+        }
+    }
 }

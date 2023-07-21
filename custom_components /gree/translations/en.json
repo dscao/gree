@@ -44,5 +44,27 @@
 				"aux_heat": "aux_heat"
 			}
 		}
-	}
+	},
+    "entity": {
+		"climate": {
+			"gree_ac": {
+				"state_attributes": {
+					"fan_mode": {
+                        "state": {
+                            "medium-low": "medium-low",
+                            "medium-high": "medium-high",
+                            "Turbo": "Turbo",
+                            "Quiet": "Quiet"
+                        }
+                    },
+                    "swing_mode": {
+                        "state": {
+                            "auto": "auto",
+                            "off": "off"
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
