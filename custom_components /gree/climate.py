@@ -529,11 +529,10 @@ class GreeClimate(ClimateEntity):
             await self._fetcher.SyncState({'StHt': 0, 'SvSt': 0, 'SlpMod': 0, 'Tur': 0,'Quiet': 1})
         elif fan_mode == "Turbo":
             await self._fetcher.SyncState({'StHt': 0, 'SvSt': 0, 'SlpMod': 0, 'Tur': 1,'Quiet': 0})
-        else:
-            await self._fetcher.SyncState({'Tur': 0,'Quiet': 0})
-        if fan_mode not in FAN_MODES:
-            raise ValueError(f"Invalid fan mode: {fan_mode}")
-        await self._fetcher.SyncState({'WdSpd': FAN_MODES.index(fan_mode)})
+        else:            
+            if fan_mode not in FAN_MODES:
+                raise ValueError(f"Invalid fan mode: {fan_mode}")
+            await self._fetcher.SyncState({'WdSpd': FAN_MODES.index(fan_mode), 'Tur': 0,'Quiet': 0})
         self.async_write_ha_state()
 
     @property
