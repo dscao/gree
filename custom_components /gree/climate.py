@@ -13,7 +13,6 @@ import binascii
 import os.path
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
-from homeassistant.const import ATTR_TEMPERATURE, PRECISION_WHOLE, UnitOfTemperature
 
 from homeassistant.components.climate import (
     FAN_AUTO,
@@ -30,21 +29,19 @@ from homeassistant.components.climate import (
     SWING_OFF,
     SWING_VERTICAL,
     ClimateEntity,
-    ClimateEntityFeature,
-    HVACMode,
 )
 
 
 from homeassistant.components.climate.const import (
-    HVAC_MODE_OFF, HVAC_MODE_AUTO, HVAC_MODE_COOL, HVAC_MODE_DRY,
-    HVAC_MODE_FAN_ONLY, HVAC_MODE_HEAT, SUPPORT_FAN_MODE,
-    SUPPORT_TARGET_TEMPERATURE, SUPPORT_SWING_MODE)
+    HVACMode, 
+    ClimateEntityFeature,
+)
 
 from homeassistant.const import (
     ATTR_UNIT_OF_MEASUREMENT, ATTR_TEMPERATURE, 
     CONF_NAME, CONF_HOST, CONF_PORT, CONF_MAC, CONF_TIMEOUT, CONF_CUSTOMIZE, 
     STATE_ON, STATE_OFF, STATE_UNKNOWN, 
-    TEMP_CELSIUS, PRECISION_WHOLE, PRECISION_TENTHS)
+    UnitOfTemperature, PRECISION_WHOLE, PRECISION_TENTHS)
 
 from homeassistant.helpers.event import (async_track_state_change)
 from homeassistant.core import callback
@@ -90,7 +87,7 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-SUPPORT_FLAGS = SUPPORT_TARGET_TEMPERATURE | SUPPORT_FAN_MODE | SUPPORT_SWING_MODE
+SUPPORT_FLAGS = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.FAN_MODE | ClimateEntityFeature.SWING_MODE
 
 DEFAULT_NAME = 'Gree Climate'
 
@@ -209,7 +206,7 @@ PRESET_MODES = [
 SWING_MODES = [SWING_OFF, SWING_VERTICAL, SWING_HORIZONTAL, SWING_BOTH]
 
 # fixed values in gree mode lists
-HVAC_MODES = [HVAC_MODE_AUTO, HVAC_MODE_COOL, HVAC_MODE_DRY, HVAC_MODE_FAN_ONLY, HVAC_MODE_HEAT, HVAC_MODE_OFF]
+HVAC_MODES = [HVACMode.AUTO, HVACMode.COOL, HVACMode.DRY, HVACMode.FAN_ONLY, HVACMode.HEAT, HVACMode.OFF]
 
 FAN_MODES = ['auto', 'low', 'medium-low', 'medium', 'medium-high', 'high', 'Turbo', 'Quiet']
 
@@ -447,7 +444,7 @@ class GreeClimate(ClimateEntity):
             self._name,
         )
 
-        if (hvac_mode == HVAC_MODE_OFF):
+        if (hvac_mode == HVACMode.OFF):
             await self._fetcher.SyncState({'Pow': 0})
         else:
             await self._fetcher.SyncState({'Mod': HVAC_MODES.index(hvac_mode), 'Pow': 1})

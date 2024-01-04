@@ -10,12 +10,6 @@ import binascii
 import os.path
 import voluptuous as vol
 
-from homeassistant.const import (
-    ATTR_UNIT_OF_MEASUREMENT, ATTR_TEMPERATURE, 
-    CONF_NAME, CONF_HOST, CONF_PORT, CONF_MAC, CONF_TIMEOUT, CONF_CUSTOMIZE, 
-    STATE_ON, STATE_OFF, STATE_UNKNOWN, 
-    TEMP_CELSIUS, PRECISION_WHOLE, PRECISION_TENTHS)
-
 from homeassistant.helpers.event import (async_track_state_change)
 from homeassistant.core import callback
 from homeassistant.helpers.restore_state import RestoreEntity
