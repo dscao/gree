@@ -134,7 +134,6 @@ class GreeSwitch(SwitchEntity):
         self._unique_id = f"{DOMAIN}-switch-{self._mac_addr}-{self.entity_description.key}"
         self._name = self.entity_description.name
         self._change = True
-        self._switchonoff = None
         self._state = None
         self._version = version
         
@@ -169,21 +168,14 @@ class GreeSwitch(SwitchEntity):
 
     async def async_turn_on(self, **kwargs):
         """Turn switch on."""
-        self._is_on = True
-        self._change = False
-        # await self._fetcher.SyncState({self.entity_description.key: 1})
         await self._fetcher.SyncState({self.entity_description.key: 1})
-        self._switchonoff = "on"
-        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
 
 
     async def async_turn_off(self, **kwargs):
         """Turn switch off."""
-        self._is_on = False
-        self._change = False
         await self._fetcher.SyncState({self.entity_description.key: 0})
-        self._switchonoff = "off"
-        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
 
     async def async_added_to_hass(self):
         """Connect to dispatcher listening for entity data notifications."""
