@@ -64,6 +64,11 @@ GREE_SWITCHES: tuple[SwitchEntityDescription, ...] = (
         name="Panel Light",
         key="Lig",
     ),
+    SwitchEntityDescription(
+        icon="mdi:heating-coil",
+        name="Aux Heat",
+        key="AssHt",
+    ),
     # SwitchEntityDescription(
         # name="Quiet",
         # key="Quiet",
@@ -81,7 +86,7 @@ GREE_SWITCHES: tuple[SwitchEntityDescription, ...] = (
         name="Health mode",
         key="Health",
         entity_registry_enabled_default=True,
-    ),
+    ),    
 )
 SWITCH_TYPES_MAP = { description.key: description for description in GREE_SWITCHES }
 
@@ -134,12 +139,7 @@ class GreeSwitch(SwitchEntity):
         self._version = version
         
         self._fetcher = DataFetcher(self._host, self._port, self._mac_addr, DEFAULT_TIMEOUT, self._uid, self._encryption_key, self._hass)
-        
-        self._switchonoff = self.coordinator.data[self.entity_description.key]
-        
-        self._is_on = self._switchonoff == 1
-        self._state = "on" if self._is_on == True else "off"
-        
+              
         self._attr_device_info = {
             "identifiers": {(DOMAIN, host)},
             "name": f"Gree AC {self._host}", 
@@ -165,12 +165,13 @@ class GreeSwitch(SwitchEntity):
     @property
     def is_on(self):
         """Check if switch is on."""        
-        return self._is_on
+        return self.coordinator.data[self.entity_description.key] == 1
 
     async def async_turn_on(self, **kwargs):
         """Turn switch on."""
         self._is_on = True
         self._change = False
+        # await self._fetcher.SyncState({self.entity_description.key: 1})
         await self._fetcher.SyncState({self.entity_description.key: 1})
         self._switchonoff = "on"
         self.async_write_ha_state()

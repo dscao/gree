@@ -122,6 +122,7 @@ class Props(enum.Enum):
     TURBO = "Tur"
     STEADY_HEAT = "StHt"
     POWER_SAVE = "SvSt"
+    AUX_HEAT = "AssHt"
     UNKNOWN_HEATCOOLTYPE = "HeatCoolType"
 
 
@@ -239,6 +240,7 @@ class GreeClimate(ClimateEntity):
         | ClimateEntityFeature.FAN_MODE
         | ClimateEntityFeature.PRESET_MODE
         | ClimateEntityFeature.SWING_MODE
+        | ClimateEntityFeature.AUX_HEAT
     )
     
     def __init__(self, hass, coordinator, mac, host, port, target_temp_step, temp_sensor_entity_id, encryption_key, version, uid):
@@ -570,6 +572,23 @@ class GreeClimate(ClimateEntity):
             await self._fetcher.SyncState({'SwingLfRig': 1,'SwUpDn': 0})
         else:
             await self._fetcher.SyncState({'SwingLfRig': 0,'SwUpDn': 0})
+        self.async_write_ha_state()
+        
+    @property
+    def is_aux_heat(self) -> int | None:
+        """Return the current fan mode for the device."""
+        return self.coordinator.data["AssHt"] == 1
+            
+    async def async_turn_aux_heat_on(self) -> None:
+        """Turn on the device."""
+        _LOGGER.debug("Turning on aux_heat for device %s", self._name)
+        await self._fetcher.SyncState({'AssHt': 1})
+        self.async_write_ha_state()
+
+    async def async_turn_aux_heat_off(self) -> None:
+        """Turn off the device."""
+        _LOGGER.debug("Turning off aux_heat for device %s", self._name)
+        await self._fetcher.SyncState({'AssHt': 0})
         self.async_write_ha_state()
 
 

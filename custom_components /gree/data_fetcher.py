@@ -36,7 +36,7 @@ class DataFetcher:
         self._data = {}
         self._data["currentValues"] = []
         
-        self._acOptions = { 'Pow': None, 'Mod': None, 'SetTem': None, 'WdSpd': None, 'Air': None, 'Blo': None, 'Health': None, 'SwhSlp': None, 'Lig': None, 'SwingLfRig': None, 'SwUpDn': None, 'Quiet': None, 'Tur': None, 'StHt': None, 'TemUn': None, 'HeatCoolType': None, 'TemRec': None, 'SvSt': None, 'SlpMod': None }
+        self._acOptions = { 'Pow': None, 'Mod': None, 'SetTem': None, 'WdSpd': None, 'Air': None, 'Blo': None, 'Health': None, 'SwhSlp': None, 'Lig': None, 'SwingLfRig': None, 'SwUpDn': None, 'Quiet': None, 'Tur': None, 'StHt': None, 'TemUn': None, 'HeatCoolType': None, 'TemRec': None, 'SvSt': None, 'SlpMod': None, 'AssHt': None }
         self.target_temperature = None
 
     # Pad helper method to help us get the right string for encrypting
@@ -50,15 +50,19 @@ class DataFetcher:
         clientSock.settimeout(timeout_s)
         clientSock.sendto(bytes(json, "utf-8"), (ip_addr, port))
         data, addr = clientSock.recvfrom(64000)
-        receivedJson = simplejson.loads(data)
+        receivedJson = simplejson.loads(data)   
         clientSock.close()
+        #receivedJson = {"t":"pack","i":0,"uid":0,"cid":"c8f74218ed83","tcid":"0938e7dcc288","pack":"83yAN+n1y4d4oK0UkhTgC57c69aHR0JubLB8ZN91NJXxtDWCHQYE0vnaBfC/4LzBSNJXFjCJjGgdwK9dWJaEaInY5VGCUfdW/4Rq6u2ERiM="}
+        
         pack = receivedJson['pack']
         base64decodedPack = base64.b64decode(pack)
         decryptedPack = cipher.decrypt(base64decodedPack)
         decodedPack = decryptedPack.decode("utf-8")
         replacedPack = decodedPack.replace('\x0f', '').replace(decodedPack[decodedPack.rindex('}')+1:], '')
-        loadedJsonPack = simplejson.loads(replacedPack)  
-        _LOGGER.debug(loadedJsonPack)        
+        loadedJsonPack = simplejson.loads(replacedPack)
+        _LOGGER.debug('FetchResult')
+        _LOGGER.debug(loadedJsonPack)
+        _LOGGER.debug('FetchResult')
         return loadedJsonPack
 
     def GreeGetValues(self, propertyNames):
@@ -66,7 +70,7 @@ class DataFetcher:
         return self.FetchResult(self.CIPHER, self._host, self._port, self._timeout, jsonPayloadToSend)['dat']
                       
     async def getcurrentvalues(self):    
-        optionsToFetch = ["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod","TemSen"]
+        optionsToFetch = ["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod","AssHt","TemSen"]
 
         # Cipher to use to encrypt/decrypt
         self.CIPHER = AES.new(self._encryption_key, AES.MODE_ECB)        
@@ -83,28 +87,19 @@ class DataFetcher:
         _LOGGER.debug(self._data)
         return self._data
       
-    def SetAcOptions(self, acOptions, newOptionsToOverride, optionValuesToOverride = None):
-        #_LOGGER.debug("SetAcOptions")
-        #_LOGGER.debug(acOptions)
-        #_LOGGER.debug(newOptionsToOverride)
-        #_LOGGER.debug(optionValuesToOverride)
-        if not (optionValuesToOverride is None):
-            _LOGGER.info('Setting acOptions with retrieved HVAC values')
-            for key in newOptionsToOverride:
-                _LOGGER.debug('Setting %s: %s' % (key, optionValuesToOverride[newOptionsToOverride.index(key)]))
-                acOptions[key] = optionValuesToOverride[newOptionsToOverride.index(key)]
-            _LOGGER.info('Done setting acOptions')
-        else:
-            _LOGGER.info('Overwriting acOptions with new settings')            
-            for key, value in newOptionsToOverride.items():
-                _LOGGER.debug('Overwriting %s: %s' % (key, value))
-                acOptions[key] = value
-            _LOGGER.info('Done overwriting acOptions')
-        return acOptions
-        
-    def SendStateToAc(self, timeout):
+
+    def SendCommandToAc(self, jsondata, timeout):
         _LOGGER.info('Start sending state to HVAC')
-        statePackJson = '{' + '"opt":["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod"],"p":[{Pow},{Mod},{SetTem},{WdSpd},{Air},{Blo},{Health},{SwhSlp},{Lig},{SwingLfRig},{SwUpDn},{Quiet},{Tur},{StHt},{TemUn},{HeatCoolType},{TemRec},{SvSt},{SlpMod}],"t":"cmd"'.format(**self._acOptions) + '}'
+        opt = "["
+        p = "["
+        for key, value in jsondata.items():
+            _LOGGER.debug('command %s: %s' % (key, value))
+            opt += "\"" + key + "\","
+            p += str(value) + ","
+        opt = opt[:-1] + "]"
+        p = p[:-1] + "]"
+        statePackJson = '{' + '"mac":"' + str(self._mac_addr) + '","opt":' + opt + ',"p":' + p + ',"t":"cmd"' + '}'
+        _LOGGER.debug(statePackJson)
         sentJsonPayload = '{"cid":"app","i":0,"pack":"' + base64.b64encode(self.CIPHER.encrypt(self.Pad(statePackJson).encode("utf8"))).decode('utf-8') + '","t":"pack","tcid":"' + str(self._mac_addr) + '","uid":{}'.format(self._uid) + '}'
         # Setup UDP Client & start transfering
         clientSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -121,11 +116,12 @@ class DataFetcher:
         receivedJsonPayload = simplejson.loads(replacedPack)
         _LOGGER.info('Done sending state to HVAC: ' + str(receivedJsonPayload))
     
+        
     async def SyncState(self, acOptions = {}):
         #Fetch current settings from HVAC
         _LOGGER.debug('Starting SyncState')
 
-        optionsToFetch = ["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod"]
+        optionsToFetch = ["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod","AssHt"]
         await self.getcurrentvalues()
         
         currentValues = self._data["currentValues"]
@@ -140,7 +136,8 @@ class DataFetcher:
         # Initialize the receivedJsonPayload variable (for return)
         receivedJsonPayload = ''
 
-        self.SendStateToAc(self._timeout)
+        #self.SendStateToAc(self._timeout)
+        self.SendCommandToAc(acOptions, self._timeout)
 
         _LOGGER.debug('Finished SyncState')
         return receivedJsonPayload

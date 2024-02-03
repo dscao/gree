@@ -249,7 +249,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                                     {"value": "Air", "label": "Fresh Air"},
                                     {"value": "Blo", "label": "XFan"},
                                     {"value": "Health", "label": "Health mode"},
-                                    # {"value": CONF_AUX_HEAT, "label": CONF_AUX_HEAT},
+                                    {"value": "AssHt", "label": "Aux Heat"},
                                     # {"value": "Quiet", "label": "Quiet"},
                                 ], 
                                 multiple=True,translation_key=CONF_SWITCHS

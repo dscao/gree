@@ -109,7 +109,7 @@ class DataUpdateCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, host, port, mac, update_interval_seconds, uid, encryption_key):
         """Initialize."""
         update_interval = datetime.timedelta(seconds=update_interval_seconds)
-        timeout_s = 5
+        timeout_s = 3
         self._encryption_key = encryption_key
         _LOGGER.debug("Data will be update every %s", update_interval)
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=update_interval)
@@ -119,12 +119,12 @@ class DataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Update data via DataFetcher."""
         try:
-            async with timeout(5):
+            async with timeout(5):                
                 Values = await self._fetcher.get_data()
                 currentValues = Values.get("currentValues")
                 if not currentValues:
                     raise UpdateFailed("failed in getting data")                
-                data = {'Pow': currentValues[0], 'Mod': currentValues[1], 'SetTem': currentValues[2], 'WdSpd': currentValues[3], 'Air': currentValues[4], 'Blo': currentValues[5], 'Health': currentValues[6], 'SwhSlp': currentValues[7], 'Lig': currentValues[8], 'SwingLfRig': currentValues[9], 'SwUpDn': currentValues[10], 'Quiet': currentValues[11], 'Tur': currentValues[12], 'StHt': currentValues[13], 'TemUn': currentValues[14], 'HeatCoolType': currentValues[15], 'TemRec': currentValues[16], 'SvSt': currentValues[17], 'SlpMod': currentValues[18], 'TemSen': currentValues[19]}
+                data = {'Pow': currentValues[0], 'Mod': currentValues[1], 'SetTem': currentValues[2], 'WdSpd': currentValues[3], 'Air': currentValues[4], 'Blo': currentValues[5], 'Health': currentValues[6], 'SwhSlp': currentValues[7], 'Lig': currentValues[8], 'SwingLfRig': currentValues[9], 'SwUpDn': currentValues[10], 'Quiet': currentValues[11], 'Tur': currentValues[12], 'StHt': currentValues[13], 'TemUn': currentValues[14], 'HeatCoolType': currentValues[15], 'TemRec': currentValues[16], 'SvSt': currentValues[17], 'SlpMod': currentValues[18], 'AssHt': currentValues[19], 'TemSen': currentValues[20]}
                 _LOGGER.debug(data)
                 return data
         except Exception as error:
