@@ -120,25 +120,11 @@ class DataFetcher:
     async def SyncState(self, acOptions = {}):
         #Fetch current settings from HVAC
         _LOGGER.debug('Starting SyncState')
-
         optionsToFetch = ["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod","AssHt"]
-        await self.getcurrentvalues()
-        
-        currentValues = self._data["currentValues"]
-
-        # Set latest status from device
-        self._acOptions = self.SetAcOptions(self._acOptions, optionsToFetch, currentValues)
-
-        # Overwrite status with our choices
-        if not(acOptions == {}):
-            self._acOptions = self.SetAcOptions(self._acOptions, acOptions)
-
-        # Initialize the receivedJsonPayload variable (for return)
+        await self.getcurrentvalues()        
+        currentValues = self._data["currentValues"]       
         receivedJsonPayload = ''
-
-        #self.SendStateToAc(self._timeout)
         self.SendCommandToAc(acOptions, self._timeout)
-
         _LOGGER.debug('Finished SyncState')
         return receivedJsonPayload
 
