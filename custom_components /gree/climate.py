@@ -87,7 +87,15 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-SUPPORT_FLAGS = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.FAN_MODE | ClimateEntityFeature.SWING_MODE
+SUPPORT_FLAGS = (
+    ClimateEntityFeature.TARGET_TEMPERATURE
+    | ClimateEntityFeature.FAN_MODE
+    | ClimateEntityFeature.PRESET_MODE
+    | ClimateEntityFeature.SWING_MODE
+    | ClimateEntityFeature.AUX_HEAT
+    | ClimateEntityFeature.TURN_OFF
+    | ClimateEntityFeature.TURN_ON
+)
 
 DEFAULT_NAME = 'Gree Climate'
 
@@ -235,13 +243,8 @@ class GreeClimate(ClimateEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "gree_ac"
     _attr_precision = PRECISION_WHOLE
-    _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE
-        | ClimateEntityFeature.FAN_MODE
-        | ClimateEntityFeature.PRESET_MODE
-        | ClimateEntityFeature.SWING_MODE
-        | ClimateEntityFeature.AUX_HEAT
-    )
+    _attr_supported_features = SUPPORT_FLAGS
+    _enable_turn_on_off_backwards_compatibility = False
     
     def __init__(self, hass, coordinator, mac, host, port, target_temp_step, temp_sensor_entity_id, encryption_key, version, uid):
         """Initialize."""
