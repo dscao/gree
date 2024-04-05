@@ -92,7 +92,6 @@ SUPPORT_FLAGS = (
     | ClimateEntityFeature.FAN_MODE
     | ClimateEntityFeature.PRESET_MODE
     | ClimateEntityFeature.SWING_MODE
-    | ClimateEntityFeature.AUX_HEAT
     | ClimateEntityFeature.TURN_OFF
     | ClimateEntityFeature.TURN_ON
 )
@@ -577,25 +576,6 @@ class GreeClimate(ClimateEntity):
             await self._fetcher.SyncState({'SwingLfRig': 0,'SwUpDn': 0})
         self.async_write_ha_state()
         
-    @property
-    def is_aux_heat(self) -> int | None:
-        """Return the current fan mode for the device."""
-        return self.coordinator.data["AssHt"] == 1
-            
-    async def async_turn_aux_heat_on(self) -> None:
-        """Turn on the device."""
-        _LOGGER.debug("Turning on aux_heat for device %s", self._name)
-        await self._fetcher.SyncState({'AssHt': 1})
-        self.async_write_ha_state()
-
-    async def async_turn_aux_heat_off(self) -> None:
-        """Turn off the device."""
-        _LOGGER.debug("Turning off aux_heat for device %s", self._name)
-        await self._fetcher.SyncState({'AssHt': 0})
-        self.async_write_ha_state()
-
-
-
     @property
     def swing_modes(self) -> list[str]:
         """Return the swing modes currently supported for this device."""
