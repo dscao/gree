@@ -43,8 +43,8 @@ from homeassistant.const import (
     STATE_ON, STATE_OFF, STATE_UNKNOWN, 
     UnitOfTemperature, PRECISION_WHOLE, PRECISION_TENTHS)
 
-from homeassistant.helpers.event import (async_track_state_change)
-from homeassistant.core import callback
+from homeassistant.helpers.event import (async_track_state_change_event)
+from homeassistant.core import Event, EventStateChangedData, callback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.entity import DeviceInfo
@@ -300,10 +300,14 @@ class GreeClimate(ClimateEntity):
             if state_temperature is not None:
                 self._async_update_current_temp(state_temperature)
                 _LOGGER.info('安装外部传感器实体: ' + str(temp_sensor_entity_id))
-            async_track_state_change(
+            async_track_state_change_event(
                 hass, temp_sensor_entity_id, self._async_temp_sensor_changed)
  
-    async def _async_temp_sensor_changed(self, entity_id, old_state, new_state):
+    @callback  
+    def _async_temp_sensor_changed(event: Event[EventStateChangedData]) -> None:
+        entity_id = event.data["entity_id"]
+        old_state = event.data["old_state"]
+        new_state = event.data["new_state"]
         _LOGGER.info('temp_sensor state changed |' + str(entity_id) + '|' + str(old_state) + '|' + str(new_state))
         # Handle temperature changes.
         if new_state is None:
