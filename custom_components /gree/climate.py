@@ -44,7 +44,7 @@ from homeassistant.const import (
     UnitOfTemperature, PRECISION_WHOLE, PRECISION_TENTHS)
 
 from homeassistant.helpers.event import (async_track_state_change_event)
-from homeassistant.core import Event, EventStateChangedData, callback
+from homeassistant.core import callback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.entity import DeviceInfo
@@ -79,6 +79,7 @@ from .const import (
     FAN_MEDIUM_HIGH,
     FAN_MEDIUM_LOW,
     CONF_VERSION,
+    CONF_ENCRYPTION_VERSION,
 )
 from homeassistant.exceptions import ConfigEntryNotReady
 
@@ -228,12 +229,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     target_temp_step = config_entry.data[CONF_TARGET_TEMP_STEP]
     
     encryption_key = config_entry.options.get(CONF_ENCRYPTION_KEY, config_entry.data[CONF_ENCRYPTION_KEY]).encode('utf-8')
+    encryption_version = config_entry.options.get(CONF_ENCRYPTION_VERSION, config_entry.data.get(CONF_ENCRYPTION_VERSION, 1))
     version = config_entry.data.get(CONF_VERSION, 0)
     uid = config_entry.options.get(CONF_UID, 0)    
     temp_sensor_entity_id = config_entry.options.get(CONF_TEMP_SENSOR)
     climates = []
     
-    climates.append(GreeClimate(hass, coordinator, mac, host, port, target_temp_step, temp_sensor_entity_id, encryption_key, version, uid))
+    climates.append(GreeClimate(hass, coordinator, mac, host, port, target_temp_step, temp_sensor_entity_id, encryption_version, encryption_key, version, uid))
     async_add_entities(climates, False)    
          
             
@@ -245,7 +247,7 @@ class GreeClimate(ClimateEntity):
     _attr_supported_features = SUPPORT_FLAGS
     _enable_turn_on_off_backwards_compatibility = False
     
-    def __init__(self, hass, coordinator, mac, host, port, target_temp_step, temp_sensor_entity_id, encryption_key, version, uid):
+    def __init__(self, hass, coordinator, mac, host, port, target_temp_step, temp_sensor_entity_id, encryption_version, encryption_key, version, uid):
         """Initialize."""
         _LOGGER.info('Initialize the GREE climate device')
         super().__init__()
@@ -253,12 +255,17 @@ class GreeClimate(ClimateEntity):
         self._host = host
         self._port = port
         self._encryption_key = encryption_key
+        self._encryption_version = encryption_version
         self._version = version
-        self._uid = uid
         self._mac_addr = mac
         self._unique_id = f"climate.gree-{self._mac_addr}"
         self._name = None #f"{DEFAULT_NAME}-{host}"
         self._state = None
+        
+        if uid:
+            self._uid = uid
+        else:
+            self._uid = 0
 
         self._attr_device_class = "climate"
         self._attr_icon = "mdi:air-conditioner"
@@ -285,7 +292,7 @@ class GreeClimate(ClimateEntity):
         
         self._properties = None
 
-        self._fetcher = DataFetcher(self._host, self._port, self._mac_addr, DEFAULT_TIMEOUT, self._uid, self._encryption_key, self._hass)
+        self._fetcher = DataFetcher(self._host, self._port, self._mac_addr, DEFAULT_TIMEOUT, self._uid, self._encryption_version, self._encryption_key, self._hass)
         
         self._attr_device_info = {
             "identifiers": {(DOMAIN, host)},
@@ -303,11 +310,7 @@ class GreeClimate(ClimateEntity):
             async_track_state_change_event(
                 hass, temp_sensor_entity_id, self._async_temp_sensor_changed)
  
-    @callback  
-    def _async_temp_sensor_changed(self, event: Event[EventStateChangedData]) -> None:
-        entity_id = event.data["entity_id"]
-        old_state = event.data["old_state"]
-        new_state = event.data["new_state"]
+    async def _async_temp_sensor_changed(self, entity_id, old_state, new_state):
         _LOGGER.info('temp_sensor state changed |' + str(entity_id) + '|' + str(old_state) + '|' + str(new_state))
         # Handle temperature changes.
         if new_state is None:

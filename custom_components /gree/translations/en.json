@@ -26,6 +26,7 @@
 					"temp_sensor": "temp_sensor",
 					"update_interval_seconds": "Update_interval(1-60 seconds)",
 					"encryption_key": "encryption_key",
+                    "encryption_version": "encryption version (1 or 2)",
 					"uid": "UID",
                     "switchs": "switchs"
                 },

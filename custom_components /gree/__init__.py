@@ -28,6 +28,7 @@ from .const import (
     CONF_UID,
     CONF_AUX_HEAT,
     CONF_VERSION,
+    CONF_ENCRYPTION_VERSION,
 )
 from homeassistant.exceptions import ConfigEntryNotReady
 
@@ -51,6 +52,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     host = entry.data[CONF_HOST]
     port = entry.data[CONF_PORT]
     mac = entry.data[CONF_MAC]
+    encryption_version = entry.options.get(CONF_ENCRYPTION_VERSION, entry.data.get(CONF_ENCRYPTION_VERSION, 1))
     encryption_key = entry.options.get(CONF_ENCRYPTION_KEY, entry.data[CONF_ENCRYPTION_KEY]).encode('utf-8')
     update_interval_seconds = entry.options.get(CONF_UPDATE_INTERVAL, 5)
     uid = entry.options.get(CONF_UID, 0)
@@ -58,7 +60,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     #uid = entry.data.options.get[CONF_UID,""]
 
-    coordinator = DataUpdateCoordinator(hass, host, port, mac, update_interval_seconds, uid, encryption_key)
+    coordinator = DataUpdateCoordinator(hass, host, port, mac, update_interval_seconds, uid, encryption_version, encryption_key)
     
     await coordinator.async_refresh()
 
@@ -108,15 +110,16 @@ async def update_listener(hass, entry):
 class DataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching data."""
 
-    def __init__(self, hass, host, port, mac, update_interval_seconds, uid, encryption_key):
+    def __init__(self, hass, host, port, mac, update_interval_seconds, uid, encryption_version, encryption_key):
         """Initialize."""
         update_interval = datetime.timedelta(seconds=update_interval_seconds)
-        timeout_s = 3
+        timeout = 3
         self._encryption_key = encryption_key
+        self._encryption_version = encryption_version
         _LOGGER.debug("Data will be update every %s", update_interval)
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=update_interval)
         self._mac_addr = mac
-        self._fetcher = DataFetcher(host, port, self._mac_addr, timeout_s, uid, self._encryption_key, hass)
+        self._fetcher = DataFetcher(host, port, self._mac_addr, timeout, uid, self._encryption_version, self._encryption_key, hass)
 
     async def _async_update_data(self):
         """Update data via DataFetcher."""

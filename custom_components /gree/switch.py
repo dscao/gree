@@ -39,6 +39,7 @@ from .const import (
     CONF_UID,
     CONF_AUX_HEAT,
     CONF_VERSION,
+    CONF_ENCRYPTION_VERSION,
 )
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.core import callback
@@ -100,6 +101,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     port = config_entry.data[CONF_PORT]
     mac = config_entry.data[CONF_MAC]    
     encryption_key = config_entry.options.get(CONF_ENCRYPTION_KEY, config_entry.data[CONF_ENCRYPTION_KEY]).encode('utf-8')
+    encryption_version = config_entry.options.get(CONF_ENCRYPTION_VERSION, config_entry.data.get(CONF_ENCRYPTION_VERSION, 1))
     version = config_entry.data.get(CONF_VERSION, 0)
     uid = config_entry.options.get(CONF_UID, 0) 
     
@@ -113,13 +115,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         
     for switch in enabled_switchs:
         _LOGGER.debug( SWITCH_TYPES_MAP[switch])
-        switchs.append(GreeSwitch(hass, SWITCH_TYPES_MAP[switch], coordinator, host, port, mac, encryption_key, uid, version))
+        switchs.append(GreeSwitch(hass, SWITCH_TYPES_MAP[switch], coordinator, host, port, mac, encryption_version, encryption_key, uid, version))
     async_add_entities(switchs, False)
            
 
 class GreeSwitch(SwitchEntity):
     _attr_has_entity_name = True
-    def __init__(self, hass, description, coordinator, host, port, mac, encryption_key, uid, version):
+    def __init__(self, hass, description, coordinator, host, port, mac, encryption_version, encryption_key, uid, version):
         """Initialize."""
         super().__init__()
         self.entity_description = description
@@ -129,6 +131,7 @@ class GreeSwitch(SwitchEntity):
         self._host = host
         self._port = port
         self._encryption_key = encryption_key
+        self._encryption_version = encryption_version
         self._uid = uid
         self._mac_addr = mac
         self._unique_id = f"{DOMAIN}-switch-{self._mac_addr}-{self.entity_description.key}"
@@ -137,7 +140,7 @@ class GreeSwitch(SwitchEntity):
         self._state = None
         self._version = version
         
-        self._fetcher = DataFetcher(self._host, self._port, self._mac_addr, DEFAULT_TIMEOUT, self._uid, self._encryption_key, self._hass)
+        self._fetcher = DataFetcher(self._host, self._port, self._mac_addr, DEFAULT_TIMEOUT, self._uid, self._encryption_version, self._encryption_key, self._hass)
               
         self._attr_device_info = {
             "identifiers": {(DOMAIN, host)},

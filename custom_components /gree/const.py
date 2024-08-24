@@ -22,6 +22,12 @@ CONF_AIR = "air"
 CONF_ENCRYPTION_KEY = "encryption_key"
 CONF_UID = "uid"
 
+CONF_AUTO_XFAN = 'auto_xfan'
+CONF_AUTO_LIGHT = 'auto_light'
+CONF_TARGET_TEMP = 'target_temp'
+CONF_ENCRYPTION_VERSION = 'encryption_version'
+CONF_LIGHT_SENSOR = 'light_sensor'
+
 CONF_AUX_HEAT = "aux_heat"
 
 FAN_MEDIUM_LOW = "medium low"

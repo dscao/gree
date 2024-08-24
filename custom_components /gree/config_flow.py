@@ -47,6 +47,7 @@ from .const import (
     CONF_UID,
     CONF_AUX_HEAT,
     CONF_VERSION,
+    CONF_ENCRYPTION_VERSION,
     )
 from configparser import ConfigParser
 from Crypto.Cipher import AES
@@ -85,47 +86,81 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self):
         """Initialize."""
         self._errors = {}
+
         
     # Pad helper method to help us get the right string for encrypting
     def Pad(self, s):
         aesBlockSize = 16
         return s + (aesBlockSize - len(s) % aesBlockSize) * chr(aesBlockSize - len(s) % aesBlockSize)            
 
-    def FetchResult(self, cipher, ip_addr, port, timeout_s, json):
-        _LOGGER.info('Fetching(%s, %s, %s, %s)' % (ip_addr, port, timeout_s, json))
+    def FetchResult(self, cipher, host, port, timeout, json):
+        _LOGGER.info('Fetching(%s, %s, %s, %s)' % (host, port, timeout, json))
         clientSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        clientSock.settimeout(timeout_s)
-        clientSock.sendto(bytes(json, "utf-8"), (ip_addr, port))
+        clientSock.settimeout(timeout)
+        clientSock.sendto(bytes(json, "utf-8"), (host, port))
         data, addr = clientSock.recvfrom(64000)
         receivedJson = simplejson.loads(data)
         clientSock.close()
         pack = receivedJson['pack']
         base64decodedPack = base64.b64decode(pack)
         decryptedPack = cipher.decrypt(base64decodedPack)
+        if self._encryption_version == 2:
+            tag = receivedJson['tag']
+            cipher.verify(base64.b64decode(tag))
         decodedPack = decryptedPack.decode("utf-8")
         replacedPack = decodedPack.replace('\x0f', '').replace(decodedPack[decodedPack.rindex('}')+1:], '')
-        loadedJsonPack = simplejson.loads(replacedPack)        
+        loadedJsonPack = simplejson.loads(replacedPack)
         return loadedJsonPack
 
-    def GetDeviceKey(self, mac_addr, host, port, timeout_s):
+    def GetDeviceKey(self, mac_addr, host, port, timeout):
         _LOGGER.info('Retrieving HVAC encryption key')
         cipher = AES.new(GENERIC_GREE_DEVICE_KEY.encode("utf8"), AES.MODE_ECB)
         pack = base64.b64encode(cipher.encrypt(self.Pad('{"mac":"' + str(mac_addr) + '","t":"bind","uid":0}').encode("utf8"))).decode('utf-8')
         jsonPayloadToSend = '{"cid": "app","i": 1,"pack": "' + pack + '","t":"pack","tcid":"' + str(mac_addr) + '","uid": 0}'
-        return self.FetchResult(cipher, host, port, timeout_s, jsonPayloadToSend)['key']
+        return self.FetchResult(cipher, host, port, timeout, jsonPayloadToSend)['key']
         
-    def GetDeviceInfo(self, host, port, timeout_s):
+        
+    def GetDeviceInfo(self, host, port, timeout):
         _LOGGER.info('Get Mac')
         cipher = AES.new(GENERIC_GREE_DEVICE_KEY.encode("utf8"), AES.MODE_ECB)
         jsonPayloadToSend = '{"t": "scan"}'
-        return self.FetchResult(cipher, host, port, timeout_s, jsonPayloadToSend)
+        return self.FetchResult(cipher, host, port, timeout, jsonPayloadToSend)
         
     def GreeGetValues(self, propertyNames):
-        self.CIPHER = AES.new(self._encryption_key.encode('utf-8'), AES.MODE_ECB) 
+        self.CIPHER = AES.new(self._encryption_key.encode("utf8"), AES.MODE_ECB) 
         jsonPayloadToSend = '{"cid":"app","i":0,"pack":"' + base64.b64encode(self.CIPHER.encrypt(self.Pad('{"cols":' + simplejson.dumps(propertyNames) + ',"mac":"' + str(self._mac_addr) + '","t":"status"}').encode("utf8"))).decode('utf-8') + '","t":"pack","tcid":"' + str(self._mac_addr) + '","uid":{}'.format(0) + '}'
         return self.FetchResult(self.CIPHER, self._host, self._port, DEFAULT_TIMEOUT, jsonPayloadToSend)
+        plaintext = '{"cols":' + simplejson.dumps(propertyNames) + ',"mac":"' + str(self._mac_addr) + '","t":"status"}'
+        if self._encryption_version == 1:
+            cipher = self.CIPHER
+            jsonPayloadToSend = '{"cid":"app","i":0,"pack":"' + base64.b64encode(cipher.encrypt(self.Pad(plaintext).encode("utf8"))).decode('utf-8') + '","t":"pack","tcid":"' + str(self._mac_addr) + '","uid":{}'.format(self._uid) + '}'
+        elif self._encryption_version == 2:
+            pack, tag = self.EncryptGCM(self._encryption_key.encode("utf8"), plaintext)
+            jsonPayloadToSend = '{"cid":"app","i":0,"pack":"' + pack + '","t":"pack","tcid":"' + str(self._mac_addr) + '","uid":{}'.format(self._uid) + ',"tag" : "' + tag + '"}'
+            cipher = self.GetGCMCipher(self._encryption_key.encode("utf8"))
+        return self.FetchResult(cipher, self._host, self._port, self._timeout, jsonPayloadToSend)['dat']
          
-        
+    def GetGCMCipher(self, key):
+        cipher = AES.new(key, AES.MODE_GCM, nonce=GCM_IV)
+        cipher.update(GCM_ADD)
+        return cipher
+
+    def EncryptGCM(self, key, plaintext):
+        encrypted_data, tag = self.GetGCMCipher(key).encrypt_and_digest(plaintext.encode("utf8"))
+        pack = base64.b64encode(encrypted_data).decode('utf-8')
+        tag = base64.b64encode(tag).decode('utf-8')
+        return (pack, tag)
+
+    def GetDeviceKeyGCM(self, mac_addr, host, port, timeout):
+        _LOGGER.info('Retrieving HVAC encryption key')
+        GENERIC_GREE_DEVICE_KEY = b'{yxAHAY_Lm6pbC/<'
+        plaintext = '{"cid":"' + str(mac_addr) + '", "mac":"' + str(self._mac_addr) + '","t":"bind","uid":0}'
+        pack, tag = self.EncryptGCM(GENERIC_GREE_DEVICE_KEY, plaintext)
+        jsonPayloadToSend = '{"cid": "app","i": 1,"pack": "' + pack + '","t":"pack","tcid":"' + str(mac_addr) + '","uid": 0, "tag" : "' + tag + '"}'
+        return self.FetchResult(self.GetGCMCipher(GENERIC_GREE_DEVICE_KEY), host, port, timeout, jsonPayloadToSend)['key']
+
+
+            
     def request_version(self):
         """Request the firmware version from the device."""
         ret = self.GreeGetValues(["hid","TemSen"])
@@ -165,15 +200,23 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             
             self._host = host
             self._port = port
+            self._encryption_version = 1
             self._version = ""
             
             self._deviceinfo = self.GetDeviceInfo(self._host, self._port, DEFAULT_TIMEOUT)
+            
             _LOGGER.debug(self._deviceinfo)
 
-            self._mac_addr = self._deviceinfo["mac"]            
-            
-            self._encryption_key = self.GetDeviceKey(self._mac_addr, self._host, self._port, DEFAULT_TIMEOUT)
-            _LOGGER.info('Fetched device encrytion key: %s' % str(self._encryption_key))
+            self._mac_addr = self._deviceinfo["mac"]
+
+            try:
+                self._encryption_key = self.GetDeviceKey(self._mac_addr, self._host, self._port, DEFAULT_TIMEOUT)
+                _LOGGER.info('Fetched device encrytion key: %s' % str(self._encryption_key))
+            except:
+                self._encryption_version = 2
+                self._encryption_key = self.GetDeviceKeyGCM(self._mac_addr, self._host, self._port, DEFAULT_TIMEOUT)    
+                _LOGGER.info('Fetched device encrytion key: %s' % str(self._encryption_key))
+
                    
             self._version = self.request_version()
             _LOGGER.info('Fetched device version: %s' % str(self._version))            
@@ -194,6 +237,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             config_data[CONF_MAC] = self._mac_addr
             config_data[CONF_TARGET_TEMP_STEP] = target_temp_step
             config_data[CONF_ENCRYPTION_KEY] = str(self._encryption_key)
+            config_data[CONF_ENCRYPTION_VERSION] = self._encryption_version
             config_data[CONF_VERSION] = self._version
             return self.async_create_entry(title=f"gree-{host}", data=config_data)
 
@@ -238,6 +282,10 @@ class OptionsFlow(config_entries.OptionsFlow):
                         CONF_UPDATE_INTERVAL,
                         default=self.config_entry.options.get(CONF_UPDATE_INTERVAL, 5),
                     ): vol.All(vol.Coerce(int), vol.Range(min=2, max=60)),
+                    vol.Optional(
+                        CONF_ENCRYPTION_VERSION,
+                        default=self.config_entry.options.get(CONF_ENCRYPTION_VERSION, self.config_entry.data.get(CONF_ENCRYPTION_VERSION, 1))
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=2)),
                     vol.Optional(
                         CONF_ENCRYPTION_KEY,
                         default=self.config_entry.options.get(CONF_ENCRYPTION_KEY, self.config_entry.data.get(CONF_ENCRYPTION_KEY))

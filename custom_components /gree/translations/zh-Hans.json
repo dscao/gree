@@ -6,7 +6,7 @@
         "error": {
             "cannot_connect": "连接失败",
             "invalid_auth": "认证错误",
-            "unknown": "未知错误"
+            "unknown": "未知错误，可能配置不正确，也可能设备不支持。"
         },
         "step": {
             "user": {
@@ -26,6 +26,7 @@
 					"temp_sensor": "外部温度传感器实体ID，填写“None”则使用空调内置温度传感器",
 					"update_interval_seconds": "刷新间隔时间(2-60 秒)",
 					"encryption_key": "encryption key（留空或默认为系统自动计算的结果，尽量不要手动修改。）",
+                    "encryption_version": "encryption version（1或2，留空或默认为系统自动计算的结果，尽量不要手动修改。）",
 					"uid": "UID（0为自动，尽量不要手动修改。）",
                     "switchs": "控制开关"
                 },
