@@ -5,7 +5,6 @@
 
 
 协议算法来源于： [HomeAssistant-GreeClimateComponent](https://github.com/RobHofmann/HomeAssistant-GreeClimateComponent) 
-支持的设备相同。
 
 另参考： [greeclimate](https://github.com/cmroche/greeclimate)
 
