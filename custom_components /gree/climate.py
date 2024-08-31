@@ -310,8 +310,12 @@ class GreeClimate(ClimateEntity):
             async_track_state_change_event(
                 hass, temp_sensor_entity_id, self._async_temp_sensor_changed)
  
-    async def _async_temp_sensor_changed(self, entity_id, old_state, new_state):
+    async def _async_temp_sensor_changed(self, event):
+        entity_id = event.data.get('entity_id')
+        old_state = event.data.get('old_state')
+        new_state = event.data.get('new_state')
         _LOGGER.info('temp_sensor state changed |' + str(entity_id) + '|' + str(old_state) + '|' + str(new_state))
+        
         # Handle temperature changes.
         if new_state is None:
             return
