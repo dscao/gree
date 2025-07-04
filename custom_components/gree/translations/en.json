@@ -24,6 +24,7 @@
             "user":{
                 "data": {
 					"temp_sensor": "temp_sensor",
+                    "hum_sensor": "humidity_sensor",
 					"update_interval_seconds": "Update_interval(1-60 seconds)",
 					"encryption_key": "encryption_key",
                     "encryption_version": "encryption version (1 or 2)",
@@ -38,11 +39,13 @@
 		"switchs": {
 			"options": {
 				"Lig": "Pannel Light",
-				"Quiet": "Quiet",
 				"Air": "Fresh_air",
 				"Blo": "XFan",
 				"Health": "Health",
-				"aux_heat": "aux_heat"
+				"AssHt": "Aux_Heat",
+                "Buzzer_ON_OFF": "Buzzer(may not support)",
+                "AntiDirectBlow": "Anti Direct Blow(may not support)",
+                "LigSen": "Pannel Auto Light(may not support)"
 			}
 		}
 	},
@@ -65,6 +68,32 @@
                         }
                     }
                 }
+            }
+        },
+        "switch": {			
+            "lig": {
+                "name": "Pannel Light"
+            }, 
+            "assht": {
+                "name": "Aux_Heat"
+            },            
+            "air": {
+                "name": "Fresh_air"
+            },
+            "blo": {
+                "name": "XFan"
+            },
+            "health": {
+                "name": "Health"
+            },
+            "buzzer_on_off": {
+                "name": "Buzzer"
+            },
+            "antidirectblow": {
+                "name": "Anti Direct Blow"
+            },
+            "ligsen": {
+                "name": "Pannel Auto Light"
             }
         }
     }

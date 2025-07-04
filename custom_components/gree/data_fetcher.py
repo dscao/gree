@@ -37,6 +37,7 @@ class DataFetcher:
         
         self._data = {}
         self._data["currentValues"] = []
+        self._datarefreshtimes = 0
         if encryption_key:
             _LOGGER.info('Using configured encryption key: {}'.format(encryption_key))
             self._encryption_key = encryption_key
@@ -50,7 +51,7 @@ class DataFetcher:
 
         
         
-        self._acOptions = { 'Pow': None, 'Mod': None, 'SetTem': None, 'WdSpd': None, 'Air': None, 'Blo': None, 'Health': None, 'SwhSlp': None, 'Lig': None, 'SwingLfRig': None, 'SwUpDn': None, 'Quiet': None, 'Tur': None, 'StHt': None, 'TemUn': None, 'HeatCoolType': None, 'TemRec': None, 'SvSt': None, 'SlpMod': None, 'AssHt': None }
+        self._acOptions = { 'Pow': None, 'Mod': None, 'SetTem': None, 'WdSpd': None, 'Air': None, 'Blo': None, 'Health': None, 'SwhSlp': None, 'Lig': None, 'SwingLfRig': None, 'SwUpDn': None, 'Quiet': None, 'Tur': None, 'StHt': None, 'TemUn': None, 'HeatCoolType': None, 'TemRec': None, 'SvSt': None, 'SlpMod': None, 'AssHt': None, 'Buzzer_ON_OFF': None, 'AntiDirectBlow': None, 'LigSen': None }
         self.target_temperature = None
 
     # Pad helper method to help us get the right string for encrypting
@@ -94,10 +95,18 @@ class DataFetcher:
 
         
     async def getcurrentvalues(self):    
-        optionsToFetch = ["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod","AssHt","TemSen"]
-        currentValues = self.GreeGetValues(optionsToFetch)
-        self._data["currentValues"] = currentValues
-        return 
+        optionsToFetch = ["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod","AssHt","TemSen","Buzzer_ON_OFF","AntiDirectBlow","LigSen"]
+        currentValues = None
+        try:
+            currentValues = self.GreeGetValues(optionsToFetch)
+        except:
+            _LOGGER.error('Fetch data Error')
+        if currentValues or self._datarefreshtimes >2:
+            self._data["currentValues"] = currentValues
+            self._datarefreshtimes = 0
+        else:
+            self._datarefreshtimes = self._datarefreshtimes + 1
+        return
 
     async def get_data(self):
         tasks = [            
@@ -145,9 +154,9 @@ class DataFetcher:
     async def SyncState(self, acOptions = {}):
         #Fetch current settings from HVAC
         _LOGGER.debug('Starting SyncState')
-        optionsToFetch = ["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod","AssHt"]
+        optionsToFetch = ["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod","AssHt","Buzzer_ON_OFF","AntiDirectBlow","LigSen"]
         await self.getcurrentvalues()        
-        currentValues = self._data["currentValues"]       
+        currentValues = self._data["currentValues"]
         receivedJsonPayload = ''
         self.SendCommandToAc(acOptions, self._timeout)
         _LOGGER.debug('Finished SyncState')

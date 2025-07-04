@@ -24,6 +24,7 @@
             "user":{
                 "data": {
 					"temp_sensor": "外部温度传感器实体ID，填写“None”则使用空调内置温度传感器",
+                    "hum_sensor": "外部湿度传感器实体ID，填写“None”则不显示",
 					"update_interval_seconds": "刷新间隔时间(2-60 秒)",
 					"encryption_key": "encryption key（留空或默认为系统自动计算的结果，尽量不要手动修改。）",
                     "encryption_version": "encryption version（1或2，留空或默认为系统自动计算的结果，尽量不要手动修改。）",
@@ -41,7 +42,10 @@
 				"Air": "空气净化",
 				"Blo": "X-FAN",
 				"Health": "健康模式",
-				"AssHt": "辅热"
+				"AssHt": "辅热",
+                "Buzzer_ON_OFF": "提示音(可能不支持)",
+                "AntiDirectBlow": "防直吹(可能不支持)",
+                "LigSen": "面板指示灯自动(可能不支持)"
 			}
 		}
 	},
@@ -81,6 +85,15 @@
             },
             "health": {
                 "name": "健康模式"
+            },
+            "buzzer_on_off": {
+                "name": "提示音"
+            },
+            "antidirectblow": {
+                "name": "防直吹"
+            },
+            "ligsen": {
+                "name": "面板指示灯自动"
             }
         }
     }

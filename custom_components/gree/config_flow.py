@@ -34,6 +34,7 @@ from .const import (
     CONF_MAC, 
     CONF_TARGET_TEMP_STEP, 
     CONF_TEMP_SENSOR, 
+    CONF_HUM_SENSOR,
     CONF_UPDATE_INTERVAL, 
     CONF_LIGHTS, 
     CONF_XFAN, 
@@ -167,22 +168,11 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         _LOGGER.debug(ret)
         hid = ret.get("dat")[0]
         
-        # Ex: hid = 362001000762+U-CS532AE(LT)V3.31.bin
-        #          ['362001060297+U-CS532AF(MTK)V4.bin']
         if hid:
             match = re.search(r"(?<=V)([\d.]+)\.bin$", hid)
             version = match and match.group(1)
             _LOGGER.debug("version: %s", version)
-            
 
-            # Special case firmwares ...
-            # if (
-            #     self.hid.endswith("_JDV1.bin")
-            #     or self.hid.endswith("362001000967V2.bin")
-            #     or re.match("^.*\(MTK\)V[1-3]{1}\.bin", self.hid)  # (MTK)V[1-3].bin
-            # ):
-            #     self.version = "4.0" 
-            
         temp = ret.get("dat")[1]
         if temp and temp <= TEMP_OFFSET:
             version = "4.0"
@@ -259,7 +249,7 @@ class OptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry):
         """Initialize autoamap options flow."""
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         """Manage the options."""
@@ -276,21 +266,25 @@ class OptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Optional(
                         CONF_TEMP_SENSOR,
-                        default=self.config_entry.options.get(CONF_TEMP_SENSOR, self.config_entry.data.get(CONF_TEMP_SENSOR, "None"))
+                        default=self._config_entry.options.get(CONF_TEMP_SENSOR, self._config_entry.data.get(CONF_TEMP_SENSOR, "None"))
+                    ): vol.All(vol.Coerce(str)),
+                    vol.Optional(
+                        CONF_HUM_SENSOR,
+                        default=self._config_entry.options.get(CONF_HUM_SENSOR, self._config_entry.data.get(CONF_HUM_SENSOR, "None"))
                     ): vol.All(vol.Coerce(str)),
                     vol.Optional(
                         CONF_UPDATE_INTERVAL,
-                        default=self.config_entry.options.get(CONF_UPDATE_INTERVAL, 5),
+                        default=self._config_entry.options.get(CONF_UPDATE_INTERVAL, 5),
                     ): vol.All(vol.Coerce(int), vol.Range(min=2, max=60)),
                     vol.Optional(
                         CONF_ENCRYPTION_VERSION,
-                        default=self.config_entry.options.get(CONF_ENCRYPTION_VERSION, self.config_entry.data.get(CONF_ENCRYPTION_VERSION, 1))
+                        default=self._config_entry.options.get(CONF_ENCRYPTION_VERSION, self._config_entry.data.get(CONF_ENCRYPTION_VERSION, 1))
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=2)),
                     vol.Optional(
                         CONF_ENCRYPTION_KEY,
-                        default=self.config_entry.options.get(CONF_ENCRYPTION_KEY, self.config_entry.data.get(CONF_ENCRYPTION_KEY))
+                        default=self._config_entry.options.get(CONF_ENCRYPTION_KEY, self._config_entry.data.get(CONF_ENCRYPTION_KEY))
                     ): vol.All(vol.Coerce(str)),
-                    vol.Optional(CONF_SWITCHS, default=self.config_entry.options.get(CONF_SWITCHS,[])): SelectSelector(
+                    vol.Optional(CONF_SWITCHS, default=self._config_entry.options.get(CONF_SWITCHS,[])): SelectSelector(
                             SelectSelectorConfig(
                                 options=[
                                     {"value": "Lig", "label": "Panel Light"},                                    
@@ -298,14 +292,16 @@ class OptionsFlow(config_entries.OptionsFlow):
                                     {"value": "Blo", "label": "XFan"},
                                     {"value": "Health", "label": "Health mode"},
                                     {"value": "AssHt", "label": "Aux Heat"},
-                                    # {"value": "Quiet", "label": "Quiet"},
+                                    {"value": "Buzzer_ON_OFF", "label": "Buzzer"},
+                                    {"value": "AntiDirectBlow", "label": "Anti Direct Blow"},
+                                    {"value": "LigSen", "label": "Panel Auto Light"},
                                 ], 
                                 multiple=True,translation_key=CONF_SWITCHS
                             )
                         ),
                     vol.Optional(
                         CONF_UID,
-                        default=self.config_entry.options.get(CONF_UID, 0)
+                        default=self._config_entry.options.get(CONF_UID, 0)
                     ): vol.All(vol.Coerce(int)),
                 }
             ),

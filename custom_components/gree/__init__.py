@@ -3,7 +3,8 @@ from __future__ import annotations
 from async_timeout import timeout
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, Config
+from homeassistant.core import HomeAssistant
+from homeassistant.core_config import Config
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from .data_fetcher import DataFetcher
 from .const import (

@@ -38,6 +38,9 @@ from .const import (
     CONF_ENCRYPTION_KEY,
     CONF_UID,
     CONF_AUX_HEAT,
+    CONF_BUZZER,
+    CONF_AUTO_LIGHT,
+    CONF_AUTO_XFAN,
     CONF_VERSION,
     CONF_ENCRYPTION_VERSION,
 )
@@ -64,21 +67,14 @@ GREE_SWITCHES: tuple[SwitchEntityDescription, ...] = (
         icon="mdi:lightbulb",
         name="Panel Light",
         key="Lig",
+        entity_registry_enabled_default=True,
     ),
-    SwitchEntityDescription(
-        icon="mdi:heating-coil",
-        name="Aux Heat",
-        key="AssHt",
-    ),
-    # SwitchEntityDescription(
-        # name="Quiet",
-        # key="Quiet",
-    # ),
     SwitchEntityDescription(
         name="Fresh Air",
         key="Air",
     ),
     SwitchEntityDescription(
+        icon="mdi:fan-auto",
         name="XFan",
         key="Blo",
     ),
@@ -86,7 +82,26 @@ GREE_SWITCHES: tuple[SwitchEntityDescription, ...] = (
         icon="mdi:pine-tree",
         name="Health mode",
         key="Health",
-        entity_registry_enabled_default=True,
+    ), 
+    SwitchEntityDescription(
+        icon="mdi:heating-coil",
+        name="Aux Heat",
+        key="AssHt",
+    ),
+    SwitchEntityDescription(
+        icon="mdi:lightbulb-auto",
+        name="Panel Auto Light",
+        key="LigSen",
+    ),
+    SwitchEntityDescription(
+        icon="mdi:tailwind",
+        name="Anti Direct Blow",
+        key="AntiDirectBlow",
+    ),
+    SwitchEntityDescription(
+        icon="mdi:surround-sound",
+        name="Buzzer",
+        key="Buzzer_ON_OFF",
     ),    
 )
 SWITCH_TYPES_MAP = { description.key: description for description in GREE_SWITCHES }
@@ -125,7 +140,7 @@ class GreeSwitch(SwitchEntity):
         """Initialize."""
         super().__init__()
         self.entity_description = description
-        self._attr_translation_key = self.entity_description.key.lower()
+        self._attr_translation_key = f"{self.entity_description.key.lower()}"
         self.coordinator = coordinator
         self._hass = hass
         self._host = host
@@ -139,6 +154,7 @@ class GreeSwitch(SwitchEntity):
         self._change = True
         self._state = None
         self._version = version
+        self._is_on_off = {}
         
         self._fetcher = DataFetcher(self._host, self._port, self._mac_addr, DEFAULT_TIMEOUT, self._uid, self._encryption_version, self._encryption_key, self._hass)
               
@@ -150,10 +166,10 @@ class GreeSwitch(SwitchEntity):
             "sw_version": self._version,
         }
    
-    @property
-    def name(self):
-        """Return the name."""
-        return f"{self._name}"
+    # @property
+    # def name(self):
+        # """Return the name."""
+        # return f"{self._name}"
 
     @property
     def unique_id(self):
@@ -163,20 +179,37 @@ class GreeSwitch(SwitchEntity):
     def should_poll(self):
         """Return the polling requirement of the entity."""
         return False
+        
+    @property
+    def available(self):
+        """Return True if entity is available."""
+        if self.entity_description.key == "Blo" and self.coordinator.data.get('Mod') != 1 and self.coordinator.data.get('Mod') != 2 : #关机后保持风扇运行一段时间（也称为"X-Fan"，仅在干燥和制冷模式下可用）
+            return False
+        else:    
+            #return self.coordinator.last_update_success
+            return self.coordinator.data.get(self.entity_description.key, None) != None
 
     @property
     def is_on(self):
-        """Check if switch is on."""        
-        return self.coordinator.data[self.entity_description.key] == 1
+        """Check if switch is on."""
+        if self.entity_description.key == "Blo" and self.coordinator.data.get('Mod') != 1 and self.coordinator.data.get('Mod') != 2 :
+            return False
+        else:
+            return self.coordinator.data.get(self.entity_description.key) == 1
 
     async def async_turn_on(self, **kwargs):
         """Turn switch on."""
-        await self._fetcher.SyncState({self.entity_description.key: 1})
-        await self.coordinator.async_request_refresh()
+        if self.entity_description.key == "Blo" and self.coordinator.data.get('Mod') != 1 and self.coordinator.data.get('Mod') != 2 :
+            # do nothing if not in cool or dry mode
+            _LOGGER.info('Cant set xfan in this mode')
+            return
+        else:
+            await self._fetcher.SyncState({self.entity_description.key: 1})
+            await self.coordinator.async_request_refresh()
 
 
     async def async_turn_off(self, **kwargs):
-        """Turn switch off."""
+        """Turn switch off."""   
         await self._fetcher.SyncState({self.entity_description.key: 0})
         await self.coordinator.async_request_refresh()
 
