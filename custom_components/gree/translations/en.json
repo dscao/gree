@@ -1,0 +1,71 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Device is already configured"
+        },
+        "error": {
+            "cannot_connect": "Failed to connect",
+            "invalid_auth": "Invalid authentication",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "user": {
+                "title":"Gree AC",
+                "data": {
+                    "host": "Host",
+                    "port": "Port，as 7000",
+					"target_temp_step": "target_temp_step"					
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "user":{
+                "data": {
+					"temp_sensor": "temp_sensor",
+					"update_interval_seconds": "Update_interval(1-60 seconds)",
+					"encryption_key": "encryption_key",
+                    "encryption_version": "encryption version (1 or 2)",
+					"uid": "UID",
+                    "switchs": "switchs"
+                },
+                "description": "Set Entity Options"
+            }
+        }
+    },
+	"selector": {
+		"switchs": {
+			"options": {
+				"Lig": "Pannel Light",
+				"Quiet": "Quiet",
+				"Air": "Fresh_air",
+				"Blo": "XFan",
+				"Health": "Health",
+				"aux_heat": "aux_heat"
+			}
+		}
+	},
+    "entity": {
+		"climate": {
+			"gree_ac": {
+				"state_attributes": {
+					"fan_mode": {
+                        "state": {
+                            "medium-low": "medium-low",
+                            "medium-high": "medium-high",
+                            "Turbo": "Turbo",
+                            "Quiet": "Quiet"
+                        }
+                    },
+                    "swing_mode": {
+                        "state": {
+                            "auto": "auto",
+                            "off": "off"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
