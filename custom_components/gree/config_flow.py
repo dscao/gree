@@ -238,7 +238,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema = OrderedDict()
         data_schema[vol.Required(CONF_HOST, default = "192.168.8.48")] = str
         data_schema[vol.Required(CONF_PORT, default = DEFAULT_PORT)] = int
-        data_schema[vol.Required(CONF_TARGET_TEMP_STEP, default = DEFAULT_TARGET_TEMP_STEP)] = int
+        data_schema[vol.Required(CONF_TARGET_TEMP_STEP, default = DEFAULT_TARGET_TEMP_STEP)] = vol.All(vol.Coerce(float), vol.In([0.5, 1]))
         return self.async_show_form(
             step_id="user", data_schema=vol.Schema(data_schema), errors=self._errors
         )
