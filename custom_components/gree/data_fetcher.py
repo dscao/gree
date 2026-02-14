@@ -98,10 +98,14 @@ class DataFetcher:
         optionsToFetch = ["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod","AssHt","TemSen","Buzzer_ON_OFF","AntiDirectBlow","LigSen"]
         currentValues = None
         try:
-            currentValues = self.GreeGetValues(optionsToFetch)
-        except:
-            _LOGGER.error('Fetch data Error')
-        if currentValues or self._datarefreshtimes >2:
+            # 使用 async_add_executor_job 将阻塞任务扔给线程池
+            currentValues = await self._hass.async_add_executor_job(
+                self.GreeGetValues, optionsToFetch
+            )
+        except Exception as e: # 建议把 Exception 加上，方便调试
+            _LOGGER.error('Fetch data Error: %s', e)
+            
+        if currentValues or self._datarefreshtimes > 2:
             self._data["currentValues"] = currentValues
             self._datarefreshtimes = 0
         else:
@@ -159,6 +163,24 @@ class DataFetcher:
         currentValues = self._data["currentValues"]
         receivedJsonPayload = ''
         self.SendCommandToAc(acOptions, self._timeout)
+        _LOGGER.debug('Finished SyncState')
+        return receivedJsonPayload
+        
+    async def SyncState(self, acOptions = {}):
+        #Fetch current settings from HVAC
+        _LOGGER.debug('Starting SyncState')
+        optionsToFetch = ["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet","Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt","SlpMod","AssHt","Buzzer_ON_OFF","AntiDirectBlow","LigSen"]
+        await self.getcurrentvalues()        
+        currentValues = self._data["currentValues"]
+        receivedJsonPayload = ''
+
+        try:
+            await self._hass.async_add_executor_job(
+                self.SendCommandToAc, acOptions, self._timeout
+            )
+        except Exception as e:
+            _LOGGER.error("SyncState Error: %s", e)
+
         _LOGGER.debug('Finished SyncState')
         return receivedJsonPayload
 
