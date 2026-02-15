@@ -3,262 +3,235 @@
 from __future__ import annotations
 
 import logging
-import uuid
+import re
 import voluptuous as vol
-import requests
-import binascii
-import importlib.util
 import socket
 import base64
-import re
-import sys
-
 import asyncio
-import logging
-import binascii
-import os.path
 
-import json,base64
-from hashlib import md5
-
+from collections import OrderedDict
 from homeassistant import config_entries
 from homeassistant.core import callback
-from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig, SelectSelectorMode
-from collections import OrderedDict
-from .data_fetcher import DataFetcher
+from homeassistant.const import CONF_HOST, CONF_PORT, CONF_MAC
+from homeassistant.helpers.selector import (
+    SelectSelector, 
+    SelectSelectorConfig, 
+    SelectSelectorMode,
+    EntitySelector, 
+    EntitySelectorConfig
+)
+from Crypto.Cipher import AES
+try: 
+    import simplejson as json
+except ImportError: 
+    import json
+
 from .const import (
     DOMAIN, 
     CONF_SWITCHS, 
-    CONF_HOST, 
-    CONF_PORT, 
-    CONF_MAC, 
     CONF_TARGET_TEMP_STEP, 
     CONF_TEMP_SENSOR, 
     CONF_HUM_SENSOR,
     CONF_UPDATE_INTERVAL, 
-    CONF_LIGHTS, 
-    CONF_XFAN, 
-    CONF_HEALTH, 
-    CONF_POWERSAVE, 
-    CONF_SLEEP, 
-    CONF_QUIET,
-    CONF_EIGHTDEGHEAT, 
-    CONF_AIR, 
     CONF_ENCRYPTION_KEY, 
     CONF_UID,
-    CONF_AUX_HEAT,
     CONF_VERSION,
     CONF_ENCRYPTION_VERSION,
-    )
-from configparser import ConfigParser
-from Crypto.Cipher import AES
-try: import simplejson
-except ImportError: import json as simplejson
+)
+
+from .data_fetcher import (
+    FetchResult, Pad, EncryptGCM, GetGCMCipher
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PORT = 7000
-DEFAULT_TIMEOUT = 10
+DEFAULT_TIMEOUT = 5 # 缩短超时时间，避免用户等待过久
 DEFAULT_TARGET_TEMP_STEP = 1
 GENERIC_GREE_DEVICE_KEY = "a3K8Bx%2r8Y7#xDh"
-
-# from the remote control and gree app
-TEMP_MIN = 8
-TEMP_MAX = 30
-TEMP_OFFSET = 40
-TEMP_MIN_F = 46
-TEMP_MAX_F = 86
-
-HUMIDITY_MIN = 30
-HUMIDITY_MAX = 80
-
-
+GENERIC_GREE_DEVICE_KEY_GCM = b'{yxAHAY_Lm6pbC/<'
 
 @config_entries.HANDLERS.register(DOMAIN)
 class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """handle config flow for this integration"""
+
+    VERSION = 1
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
         """Get the options flow for this handler."""
         return OptionsFlow(config_entry)
         
-        
     def __init__(self):
         """Initialize."""
         self._errors = {}
 
-        
-    # Pad helper method to help us get the right string for encrypting
-    def Pad(self, s):
-        aesBlockSize = 16
-        return s + (aesBlockSize - len(s) % aesBlockSize) * chr(aesBlockSize - len(s) % aesBlockSize)            
-
-    def FetchResult(self, cipher, host, port, timeout, json):
-        _LOGGER.info('Fetching(%s, %s, %s, %s)' % (host, port, timeout, json))
-        clientSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        clientSock.settimeout(timeout)
-        clientSock.sendto(bytes(json, "utf-8"), (host, port))
-        data, addr = clientSock.recvfrom(64000)
-        receivedJson = simplejson.loads(data)
-        clientSock.close()
-        pack = receivedJson['pack']
-        base64decodedPack = base64.b64decode(pack)
-        decryptedPack = cipher.decrypt(base64decodedPack)
-        if self._encryption_version == 2:
-            tag = receivedJson['tag']
-            cipher.verify(base64.b64decode(tag))
-        decodedPack = decryptedPack.decode("utf-8")
-        replacedPack = decodedPack.replace('\x0f', '').replace(decodedPack[decodedPack.rindex('}')+1:], '')
-        loadedJsonPack = simplejson.loads(replacedPack)
-        return loadedJsonPack
-
-    def GetDeviceKey(self, mac_addr, host, port, timeout):
-        _LOGGER.info('Retrieving HVAC encryption key')
-        cipher = AES.new(GENERIC_GREE_DEVICE_KEY.encode("utf8"), AES.MODE_ECB)
-        pack = base64.b64encode(cipher.encrypt(self.Pad('{"mac":"' + str(mac_addr) + '","t":"bind","uid":0}').encode("utf8"))).decode('utf-8')
-        jsonPayloadToSend = '{"cid": "app","i": 1,"pack": "' + pack + '","t":"pack","tcid":"' + str(mac_addr) + '","uid": 0}'
-        return self.FetchResult(cipher, host, port, timeout, jsonPayloadToSend)['key']
-        
-        
-    def GetDeviceInfo(self, host, port, timeout):
+    def _get_device_info_sync(self, host, port):
+        """同步方法：获取设备MAC (运行在线程池中)"""
         _LOGGER.info('Get Mac')
         cipher = AES.new(GENERIC_GREE_DEVICE_KEY.encode("utf8"), AES.MODE_ECB)
         jsonPayloadToSend = '{"t": "scan"}'
-        return self.FetchResult(cipher, host, port, timeout, jsonPayloadToSend)
+        # 复用 data_fetcher.FetchResult
+        return FetchResult(cipher, host, port, DEFAULT_TIMEOUT, jsonPayloadToSend, encryption_version=1)
+
+    def _get_device_key_sync(self, mac_addr, host, port):
+        """同步方法：获取设备Key (运行在线程池中)"""
+        _LOGGER.info('Retrieving HVAC encryption key (V1)')
+        cipher = AES.new(GENERIC_GREE_DEVICE_KEY.encode("utf8"), AES.MODE_ECB)
+        # 复用 data_fetcher.Pad
+        pack = base64.b64encode(cipher.encrypt(Pad('{"mac":"' + str(mac_addr) + '","t":"bind","uid":0}').encode("utf8"))).decode('utf-8')
+        jsonPayloadToSend = '{"cid": "app","i": 1,"pack": "' + pack + '","t":"pack","tcid":"' + str(mac_addr) + '","uid": 0}'
         
-    def GreeGetValues(self, propertyNames):
-        self.CIPHER = AES.new(self._encryption_key.encode("utf8"), AES.MODE_ECB) 
-        jsonPayloadToSend = '{"cid":"app","i":0,"pack":"' + base64.b64encode(self.CIPHER.encrypt(self.Pad('{"cols":' + simplejson.dumps(propertyNames) + ',"mac":"' + str(self._mac_addr) + '","t":"status"}').encode("utf8"))).decode('utf-8') + '","t":"pack","tcid":"' + str(self._mac_addr) + '","uid":{}'.format(0) + '}'
-        return self.FetchResult(self.CIPHER, self._host, self._port, DEFAULT_TIMEOUT, jsonPayloadToSend)
-        plaintext = '{"cols":' + simplejson.dumps(propertyNames) + ',"mac":"' + str(self._mac_addr) + '","t":"status"}'
-        if self._encryption_version == 1:
-            cipher = self.CIPHER
-            jsonPayloadToSend = '{"cid":"app","i":0,"pack":"' + base64.b64encode(cipher.encrypt(self.Pad(plaintext).encode("utf8"))).decode('utf-8') + '","t":"pack","tcid":"' + str(self._mac_addr) + '","uid":{}'.format(self._uid) + '}'
-        elif self._encryption_version == 2:
-            pack, tag = self.EncryptGCM(self._encryption_key.encode("utf8"), plaintext)
-            jsonPayloadToSend = '{"cid":"app","i":0,"pack":"' + pack + '","t":"pack","tcid":"' + str(self._mac_addr) + '","uid":{}'.format(self._uid) + ',"tag" : "' + tag + '"}'
-            cipher = self.GetGCMCipher(self._encryption_key.encode("utf8"))
-        return self.FetchResult(cipher, self._host, self._port, self._timeout, jsonPayloadToSend)['dat']
-         
-    def GetGCMCipher(self, key):
-        cipher = AES.new(key, AES.MODE_GCM, nonce=GCM_IV)
-        cipher.update(GCM_ADD)
-        return cipher
+        return FetchResult(cipher, host, port, DEFAULT_TIMEOUT, jsonPayloadToSend, encryption_version=1)['key']
 
-    def EncryptGCM(self, key, plaintext):
-        encrypted_data, tag = self.GetGCMCipher(key).encrypt_and_digest(plaintext.encode("utf8"))
-        pack = base64.b64encode(encrypted_data).decode('utf-8')
-        tag = base64.b64encode(tag).decode('utf-8')
-        return (pack, tag)
-
-    def GetDeviceKeyGCM(self, mac_addr, host, port, timeout):
-        _LOGGER.info('Retrieving HVAC encryption key')
-        GENERIC_GREE_DEVICE_KEY = b'{yxAHAY_Lm6pbC/<'
-        plaintext = '{"cid":"' + str(mac_addr) + '", "mac":"' + str(self._mac_addr) + '","t":"bind","uid":0}'
-        pack, tag = self.EncryptGCM(GENERIC_GREE_DEVICE_KEY, plaintext)
+    def _get_device_key_gcm_sync(self, mac_addr, host, port):
+        """同步方法：获取设备Key V2 (运行在线程池中)"""
+        _LOGGER.info('Retrieving HVAC encryption key (V2)')
+        plaintext = '{"cid":"' + str(mac_addr) + '", "mac":"' + str(mac_addr) + '","t":"bind","uid":0}'
+        pack, tag = EncryptGCM(GENERIC_GREE_DEVICE_KEY_GCM, plaintext)
         jsonPayloadToSend = '{"cid": "app","i": 1,"pack": "' + pack + '","t":"pack","tcid":"' + str(mac_addr) + '","uid": 0, "tag" : "' + tag + '"}'
-        return self.FetchResult(self.GetGCMCipher(GENERIC_GREE_DEVICE_KEY), host, port, timeout, jsonPayloadToSend)['key']
+        cipher = GetGCMCipher(GENERIC_GREE_DEVICE_KEY_GCM)
+        return FetchResult(cipher, host, port, DEFAULT_TIMEOUT, jsonPayloadToSend, encryption_version=2)['key']
 
-
-            
-    def request_version(self):
-        """Request the firmware version from the device."""
-        ret = self.GreeGetValues(["hid","TemSen"])
-        _LOGGER.debug(ret)
-        hid = ret.get("dat")[0]
+    def _request_version_sync(self, host, port, mac, key, encryption_version):
+        """同步方法：获取版本号，用于验证连接 (运行在线程池中)"""
+        _LOGGER.info("Verifying connection and getting version...")
+        prop_names = ["hid", "TemSen"]
         
+        plaintext = '{"cols":' + json.dumps(prop_names) + ',"mac":"' + str(mac) + '","t":"status"}'
+        
+        if encryption_version == 1:
+            cipher = AES.new(key.encode("utf8"), AES.MODE_ECB)
+            pack = base64.b64encode(cipher.encrypt(Pad(plaintext).encode("utf8"))).decode('utf-8')
+            payload = '{"cid":"app","i":0,"pack":"' + pack + '","t":"pack","tcid":"' + str(mac) + '","uid":0}'
+        else:
+            pack, tag = EncryptGCM(key.encode("utf8"), plaintext)
+            payload = '{"cid":"app","i":0,"pack":"' + pack + '","t":"pack","tcid":"' + str(mac) + '","uid":0,"tag":"' + tag + '"}'
+            cipher = GetGCMCipher(key.encode("utf8"))
+
+        ret = FetchResult(cipher, host, port, DEFAULT_TIMEOUT, payload, encryption_version)
+        
+        # 解析版本号
+        hid = ret.get("dat")[0]
+        version = "0"
         if hid:
             match = re.search(r"(?<=V)([\d.]+)\.bin$", hid)
             version = match and match.group(1)
-            _LOGGER.debug("version: %s", version)
-
-        temp = ret.get("dat")[1]
-        if temp and temp <= TEMP_OFFSET:
-            version = "4.0"
-            
+        
         return version
 
-        
-    async def async_step_user(self, user_input={}):
+    async def _validate_and_connect(self, host, port):
+        """
+        验证连接并获取设备信息的异步包装器
+        """
+        try:
+            # 1. 获取设备信息 (MAC) 
+            device_info = await self.hass.async_add_executor_job(
+                self._get_device_info_sync, host, port
+            )
+            mac_addr = device_info.get("mac")
+            if not mac_addr:
+                raise Exception("Could not find mac address in response")
+            
+            # 2. 尝试获取 Key (V1 或 V2)
+            encryption_version = 1
+            key = None
+            try:
+                key = await self.hass.async_add_executor_job(
+                    self._get_device_key_sync, mac_addr, host, port
+                )
+            except Exception:
+                encryption_version = 2
+                key = await self.hass.async_add_executor_job(
+                    self._get_device_key_gcm_sync, mac_addr, host, port
+                )
+            
+            if not key:
+                raise Exception("Cannot retrieve key")
+
+            # 3. 获取版本号 (验证 Key 是否有效)
+            version = await self.hass.async_add_executor_job(
+                self._request_version_sync, host, port, mac_addr, key, encryption_version
+            )
+
+            return {
+                "mac": mac_addr,
+                "key": key,
+                "version": version,
+                "encryption_version": encryption_version
+            }
+
+        except Exception as e:
+            _LOGGER.error("Connection failed: %s", e)
+            raise e
+
+    async def async_step_user(self, user_input=None):
         self._errors = {}
         if user_input is not None:
-            config_data = {}
             host = user_input[CONF_HOST]
-            port = user_input[CONF_PORT]            
-            target_temp_step = user_input[CONF_TARGET_TEMP_STEP]            
-            
-            self._host = host
-            self._port = port
-            self._encryption_version = 1
-            self._version = ""
-            
-            self._deviceinfo = self.GetDeviceInfo(self._host, self._port, DEFAULT_TIMEOUT)
-            
-            _LOGGER.debug(self._deviceinfo)
-
-            self._mac_addr = self._deviceinfo["mac"]
+            port = user_input[CONF_PORT]
+            target_temp_step = user_input[CONF_TARGET_TEMP_STEP]
 
             try:
-                self._encryption_key = self.GetDeviceKey(self._mac_addr, self._host, self._port, DEFAULT_TIMEOUT)
-                _LOGGER.info('Fetched device encrytion key: %s' % str(self._encryption_key))
-            except:
-                self._encryption_version = 2
-                self._encryption_key = self.GetDeviceKeyGCM(self._mac_addr, self._host, self._port, DEFAULT_TIMEOUT)    
-                _LOGGER.info('Fetched device encrytion key: %s' % str(self._encryption_key))
+                info = await self._validate_and_connect(host, port)
+                
+                await self.async_set_unique_id(f"climate.gree-{info['mac']}")
+                self._abort_if_unique_id_configured()
 
-                   
-            self._version = self.request_version()
-            _LOGGER.info('Fetched device version: %s' % str(self._version))            
-            
-            if not self._encryption_key:
-                self._errors["base"] = "unkown"
-                return await self._show_config_form(user_input)
+                config_data = {
+                    CONF_HOST: host,
+                    CONF_PORT: port,
+                    CONF_MAC: info['mac'],
+                    CONF_TARGET_TEMP_STEP: target_temp_step,
+                    CONF_ENCRYPTION_KEY: str(info['key']),
+                    CONF_ENCRYPTION_VERSION: info['encryption_version'],
+                    CONF_VERSION: info['version']
+                }
+                return self.async_create_entry(title=f"gree-{host}", data=config_data)
 
-            _LOGGER.debug(
-                "gree successfully, save data for gree: %s",
-                host,
-            )           
-            await self.async_set_unique_id(f"climate.gree-{self._mac_addr}")
-            self._abort_if_unique_id_configured()
-
-            config_data[CONF_HOST] = host
-            config_data[CONF_PORT] = port
-            config_data[CONF_MAC] = self._mac_addr
-            config_data[CONF_TARGET_TEMP_STEP] = target_temp_step
-            config_data[CONF_ENCRYPTION_KEY] = str(self._encryption_key)
-            config_data[CONF_ENCRYPTION_VERSION] = self._encryption_version
-            config_data[CONF_VERSION] = self._version
-            return self.async_create_entry(title=f"gree-{host}", data=config_data)
+            except Exception:
+                self._errors["base"] = "cannot_connect"
 
         return await self._show_config_form(user_input)
 
     async def _show_config_form(self, user_input):
-
         data_schema = OrderedDict()
-        data_schema[vol.Required(CONF_HOST, default = "192.168.8.48")] = str
-        data_schema[vol.Required(CONF_PORT, default = DEFAULT_PORT)] = int
-        data_schema[vol.Required(CONF_TARGET_TEMP_STEP, default = DEFAULT_TARGET_TEMP_STEP)] = vol.All(vol.Coerce(float), vol.In([0.5, 1]))
+        data_schema[vol.Required(CONF_HOST, default="192.168.1.x")] = str
+        data_schema[vol.Required(CONF_PORT, default=DEFAULT_PORT)] = int
+        data_schema[vol.Required(CONF_TARGET_TEMP_STEP, default=DEFAULT_TARGET_TEMP_STEP)] = vol.All(vol.Coerce(float), vol.In([0.5, 1]))
         return self.async_show_form(
             step_id="user", data_schema=vol.Schema(data_schema), errors=self._errors
         )
 
 
 class OptionsFlow(config_entries.OptionsFlow):
-    """Config flow options for autoamap."""
+    """Config flow options for gree."""
 
     def __init__(self, config_entry):
-        """Initialize autoamap options flow."""
+        """Initialize options flow."""
         self._config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         """Manage the options."""
-        return await self.async_step_user()
+        return await self.async_step_user(user_input)
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
+
+        current_temp_sensor = self._config_entry.options.get(CONF_TEMP_SENSOR, self._config_entry.data.get(CONF_TEMP_SENSOR))
+        if current_temp_sensor == "None": current_temp_sensor = None
+
+        current_hum_sensor = self._config_entry.options.get(CONF_HUM_SENSOR, self._config_entry.data.get(CONF_HUM_SENSOR))
+        if current_hum_sensor == "None": current_hum_sensor = None
+        
+        current_update_interval = self._config_entry.options.get(CONF_UPDATE_INTERVAL, 5)
+        current_enc_ver = self._config_entry.options.get(CONF_ENCRYPTION_VERSION, self._config_entry.data.get(CONF_ENCRYPTION_VERSION, 1))
+        current_enc_key = self._config_entry.options.get(CONF_ENCRYPTION_KEY, self._config_entry.data.get(CONF_ENCRYPTION_KEY))
+        current_uid = self._config_entry.options.get(CONF_UID, 0)
+        current_switches = self._config_entry.options.get(CONF_SWITCHS, [])
 
         return self.async_show_form(
             step_id="user",
@@ -266,25 +239,37 @@ class OptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Optional(
                         CONF_TEMP_SENSOR,
-                        default=self._config_entry.options.get(CONF_TEMP_SENSOR, self._config_entry.data.get(CONF_TEMP_SENSOR, "None"))
-                    ): vol.All(vol.Coerce(str)),
+                        description={"suggested_value": current_temp_sensor}
+                    ): EntitySelector(
+                        EntitySelectorConfig(
+                            domain="sensor",
+                            device_class="temperature",
+                            multiple=False
+                        )
+                    ),
                     vol.Optional(
                         CONF_HUM_SENSOR,
-                        default=self._config_entry.options.get(CONF_HUM_SENSOR, self._config_entry.data.get(CONF_HUM_SENSOR, "None"))
-                    ): vol.All(vol.Coerce(str)),
+                        description={"suggested_value": current_hum_sensor}
+                    ): EntitySelector(
+                        EntitySelectorConfig(
+                            domain="sensor",
+                            device_class="humidity",
+                            multiple=False
+                        )
+                    ),
                     vol.Optional(
                         CONF_UPDATE_INTERVAL,
-                        default=self._config_entry.options.get(CONF_UPDATE_INTERVAL, 5),
+                        default=current_update_interval,
                     ): vol.All(vol.Coerce(int), vol.Range(min=2, max=60)),
                     vol.Optional(
                         CONF_ENCRYPTION_VERSION,
-                        default=self._config_entry.options.get(CONF_ENCRYPTION_VERSION, self._config_entry.data.get(CONF_ENCRYPTION_VERSION, 1))
+                        default=current_enc_ver
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=2)),
                     vol.Optional(
                         CONF_ENCRYPTION_KEY,
-                        default=self._config_entry.options.get(CONF_ENCRYPTION_KEY, self._config_entry.data.get(CONF_ENCRYPTION_KEY))
+                        default=current_enc_key
                     ): vol.All(vol.Coerce(str)),
-                    vol.Optional(CONF_SWITCHS, default=self._config_entry.options.get(CONF_SWITCHS,[])): SelectSelector(
+                    vol.Optional(CONF_SWITCHS, default=current_switches): SelectSelector(
                             SelectSelectorConfig(
                                 options=[
                                     {"value": "Lig", "label": "Panel Light"},                                    
@@ -296,12 +281,13 @@ class OptionsFlow(config_entries.OptionsFlow):
                                     {"value": "AntiDirectBlow", "label": "Anti Direct Blow"},
                                     {"value": "LigSen", "label": "Panel Auto Light"},
                                 ], 
-                                multiple=True,translation_key=CONF_SWITCHS
+                                multiple=True,
+                                translation_key="switchs"
                             )
                         ),
                     vol.Optional(
                         CONF_UID,
-                        default=self._config_entry.options.get(CONF_UID, 0)
+                        default=current_uid
                     ): vol.All(vol.Coerce(int)),
                 }
             ),
