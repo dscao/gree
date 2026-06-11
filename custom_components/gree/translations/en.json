@@ -6,15 +6,15 @@
         "error": {
             "cannot_connect": "Failed to connect",
             "invalid_auth": "Invalid authentication",
-            "unknown": "Unexpected error"
+            "unknown": "Unknown error occurred. The configuration might be incorrect or the device is not supported."
         },
         "step": {
             "user": {
-                "title":"Gree AC",
+                "title": "Gree AC",
                 "data": {
-                    "host": "Host",
-                    "port": "Port，as 7000",
-					"target_temp_step": "target_temp_step"					
+                    "host": "Host Address (AC's IP)",
+                    "port": "Port (Default 7000, usually do not change)",
+                    "target_temp_step": "Target Temperature Step"                                    
                 }
             }
         }
@@ -23,77 +23,98 @@
         "step": {
             "user":{
                 "data": {
-					"temp_sensor": "temp_sensor",
-                    "hum_sensor": "humidity_sensor",
-					"update_interval_seconds": "Update_interval(1-60 seconds)",
-					"encryption_key": "encryption_key",
-                    "encryption_version": "encryption version (1 or 2)",
-					"uid": "UID",
-                    "switchs": "switchs"
+                    "temp_sensor": "External Temperature Sensor (Leave empty for internal)",
+                    "hum_sensor": "External Humidity Sensor (Leave empty to hide)",
+                    "update_interval_seconds": "Update Interval (2-60 seconds)",
+                    "encryption_key": "Encryption Key (Leave empty or default for auto-calculation)",
+                    "encryption_version": "Encryption Version (1 or 2, leave empty for auto-calculation)",
+                    "uid": "UID (0 for auto, do not modify manually if possible)",
+                    "switchs": "Control Switches"
                 },
-                "description": "Set Entity Options"
+                "description": "Set device options"
             }
         }
     },
-	"selector": {
-		"switchs": {
-			"options": {
-				"Lig": "Pannel Light",
-				"Air": "Fresh_air",
-				"Blo": "XFan",
-				"Health": "Health",
-				"AssHt": "Aux_Heat",
-                "Buzzer_ON_OFF": "Buzzer(may not support)",
-                "AntiDirectBlow": "Anti Direct Blow(may not support)",
-                "LigSen": "Pannel Auto Light(may not support)"
-			}
-		}
-	},
+    "selector": {
+        "switchs": {
+            "options": {
+                "Lig": "Panel Light",
+                "Air": "Air Purification",
+                "Blo": "X-FAN",
+                "Health": "Health Mode",
+                "AssHt": "Auxiliary Heating",
+                "Buzzer_ON_OFF": "Buzzer (May not be supported)",
+                "AntiDirectBlow": "Anti-Direct Blow (May not be supported)",
+                "LigSen": "Auto Panel Light (May not be supported)"
+            }
+        }
+    },
     "entity": {
-		"climate": {
-			"gree_ac": {
-				"state_attributes": {
-					"fan_mode": {
+        "climate": {
+            "gree_ac": {
+                "state_attributes": {
+                    "fan_mode": {
                         "state": {
-                            "medium-low": "medium-low",
-                            "medium-high": "medium-high",
+                            "medium-low": "Medium Low",
+                            "medium-high": "Medium High",
                             "Turbo": "Turbo",
                             "Quiet": "Quiet"
                         }
                     },
                     "swing_mode": {
                         "state": {
-                            "auto": "auto",
-                            "off": "off"
+                            "off": "Off",
+                            "full": "Full Swing",
+                            "fixed_upper": "Fixed Upper",
+                            "fixed_upper_middle": "Fixed Upper Middle",
+                            "fixed_middle": "Fixed Middle",
+                            "fixed_lower_middle": "Fixed Lower Middle",
+                            "fixed_lower": "Fixed Lower",
+                            "swing_upper": "Swing Upper",
+                            "swing_upper_middle": "Swing Upper Middle",
+                            "swing_middle": "Swing Middle",
+                            "swing_lower_middle": "Swing Lower Middle",
+                            "swing_lower": "Swing Lower"
+                        }
+                    },
+                    "swing_horizontal_mode": {
+                        "state": {
+                            "off": "Off",
+                            "full": "Full Swing",
+                            "left": "Left",
+                            "left_center": "Left Center",
+                            "center": "Center",
+                            "right_center": "Right Center",
+                            "right": "Right"
                         }
                     }
                 }
             }
         },
-        "switch": {			
+        "switch": {         
             "lig": {
-                "name": "Pannel Light"
+                "name": "Panel Light"
             }, 
             "assht": {
-                "name": "Aux_Heat"
+                "name": "Auxiliary Heating"
             },            
             "air": {
-                "name": "Fresh_air"
+                "name": "Air Purification"
             },
             "blo": {
-                "name": "XFan"
+                "name": "X-FAN"
             },
             "health": {
-                "name": "Health"
+                "name": "Health Mode"
             },
             "buzzer_on_off": {
                 "name": "Buzzer"
             },
             "antidirectblow": {
-                "name": "Anti Direct Blow"
+                "name": "Anti-Direct Blow"
             },
             "ligsen": {
-                "name": "Pannel Auto Light"
+                "name": "Auto Panel Light"
             }
         }
     }

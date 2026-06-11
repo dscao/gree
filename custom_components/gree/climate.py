@@ -24,10 +24,6 @@ from homeassistant.components.climate import (
     PRESET_ECO,
     PRESET_NONE,
     PRESET_SLEEP,
-    SWING_BOTH,
-    SWING_HORIZONTAL,
-    SWING_OFF,
-    SWING_VERTICAL,
     ClimateEntity,
 )
 
@@ -90,12 +86,12 @@ import datetime
 import logging
 
 _LOGGER = logging.getLogger(__name__)
-
 SUPPORT_FLAGS = (
     ClimateEntityFeature.TARGET_TEMPERATURE
     | ClimateEntityFeature.FAN_MODE
     | ClimateEntityFeature.PRESET_MODE
     | ClimateEntityFeature.SWING_MODE
+    | ClimateEntityFeature.SWING_HORIZONTAL_MODE
     | ClimateEntityFeature.TURN_OFF
     | ClimateEntityFeature.TURN_ON
 )
@@ -221,7 +217,17 @@ PRESET_MODES_NOAWAY = [
     PRESET_SLEEP,  # Sleep mode
 ]
 
-SWING_MODES = [SWING_OFF, SWING_VERTICAL, SWING_HORIZONTAL, SWING_BOTH]
+# 12 种垂直摆风档位
+VERTICAL_SWING_MODES = [
+    "off", "full", "fixed_upper", "fixed_upper_middle", "fixed_middle",
+    "fixed_lower_middle", "fixed_lower", "swing_upper", "swing_upper_middle",
+    "swing_middle", "swing_lower_middle", "swing_lower"
+]
+
+# 7 种水平摆风档位
+HORIZONTAL_SWING_MODES = [
+    "off", "full", "left", "left_center", "center", "right_center", "right"
+]
 
 # fixed values in gree mode lists
 HVAC_MODES = [HVACMode.AUTO, HVACMode.COOL, HVACMode.DRY, HVACMode.FAN_ONLY, HVACMode.HEAT, HVACMode.OFF]
@@ -247,7 +253,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     
     climates.append(GreeClimate(hass, coordinator, mac, host, port, target_temp_step, temp_sensor_entity_id, hum_sensor_entity_id, encryption_version, encryption_key, version, uid))
     async_add_entities(climates, False)    
-         
+          
             
 
 class GreeClimate(ClimateEntity):
@@ -612,45 +618,54 @@ class GreeClimate(ClimateEntity):
         """Return the fan modes support by the device."""
         return FAN_MODES
 
+    # ================= 垂直摆风逻辑 (HA 2024.12 兼容) =================
     @property
     def swing_mode(self) -> str:
-        """Return the current swing mode for the device."""
-        h_swing = self.coordinator.data["SwingLfRig"] == 1
-        v_swing = self.coordinator.data["SwUpDn"] == 1
+        """返回当前的垂直摆风模式 (12 档)."""
+        v_val = self.coordinator.data.get("SwUpDn", 0)
+        # 防止协议越界导致崩溃，提供回退机制
+        if 0 <= v_val < len(VERTICAL_SWING_MODES):
+            return VERTICAL_SWING_MODES[v_val]
+        return VERTICAL_SWING_MODES[0]
 
-        if h_swing and v_swing:
-            return SWING_BOTH
-        if h_swing:
-            return SWING_HORIZONTAL
-        if v_swing:
-            return SWING_VERTICAL
-        return SWING_OFF
-
-    async def async_set_swing_mode(self, swing_mode: str) -> None:
-        """Set new target swing operation."""
-        if swing_mode not in SWING_MODES:
-            raise ValueError(f"Invalid swing mode: {swing_mode}")
-
-        _LOGGER.debug(
-            "Setting swing mode to %s for device %s",
-            swing_mode,
-            self._name,
-        )
-
-        if swing_mode == SWING_BOTH:
-            await self._fetcher.SyncState({'SwingLfRig': 1,'SwUpDn': 1})
-        elif swing_mode == SWING_VERTICAL:
-            await self._fetcher.SyncState({'SwingLfRig': 0,'SwUpDn': 1})
-        elif swing_mode == SWING_HORIZONTAL:
-            await self._fetcher.SyncState({'SwingLfRig': 1,'SwUpDn': 0})
-        else:
-            await self._fetcher.SyncState({'SwingLfRig': 0,'SwUpDn': 0})
-        self.async_write_ha_state()
-        
     @property
     def swing_modes(self) -> list[str]:
-        """Return the swing modes currently supported for this device."""
-        return SWING_MODES
+        """返回设备支持的垂直摆风列表."""
+        return VERTICAL_SWING_MODES
+
+    async def async_set_swing_mode(self, swing_mode: str) -> None:
+        """设置垂直摆风档位."""
+        if swing_mode not in VERTICAL_SWING_MODES:
+            raise ValueError(f"Invalid vertical swing mode: {swing_mode}")
+
+        _LOGGER.debug("Setting vertical swing mode to %s for device %s", swing_mode, self._name)
+        val = VERTICAL_SWING_MODES.index(swing_mode)
+        await self._fetcher.SyncState({'SwUpDn': val})
+        self.async_write_ha_state()
+
+    # ================= 水平摆风逻辑 (HA 2024.12 新特性) =================
+    @property
+    def swing_horizontal_mode(self) -> str:
+        """返回当前的水平摆风模式 (7 档)."""
+        h_val = self.coordinator.data.get("SwingLfRig", 0)
+        if 0 <= h_val < len(HORIZONTAL_SWING_MODES):
+            return HORIZONTAL_SWING_MODES[h_val]
+        return HORIZONTAL_SWING_MODES[0]
+
+    @property
+    def swing_horizontal_modes(self) -> list[str]:
+        """返回设备支持的水平摆风列表."""
+        return HORIZONTAL_SWING_MODES
+
+    async def async_set_swing_horizontal_mode(self, swing_horizontal_mode: str) -> None:
+        """设置水平摆风档位."""
+        if swing_horizontal_mode not in HORIZONTAL_SWING_MODES:
+            raise ValueError(f"Invalid horizontal swing mode: {swing_horizontal_mode}")
+
+        _LOGGER.debug("Setting horizontal swing mode to %s for device %s", swing_horizontal_mode, self._name)
+        val = HORIZONTAL_SWING_MODES.index(swing_horizontal_mode)
+        await self._fetcher.SyncState({'SwingLfRig': val})
+        self.async_write_ha_state()
 
     async def async_added_to_hass(self):
         """Connect to dispatcher listening for entity data notifications."""
@@ -663,4 +678,3 @@ class GreeClimate(ClimateEntity):
         """Update entity."""
         await self.coordinator.async_request_refresh()
         _LOGGER.debug(self.coordinator)
-                

@@ -10,7 +10,7 @@
         },
         "step": {
             "user": {
-                "title":"格力空调",
+                "title": "格力空调",
                 "data": {
                     "host": "主机地址（空调的IP）",
                     "port": "端口，默认7000，一般情况不要修改",
@@ -63,8 +63,29 @@
                     },
                     "swing_mode": {
                         "state": {
-                            "auto": "自动",
-                            "off": "关闭"
+                            "off": "关闭",
+                            "full": "全幅摆动",
+                            "fixed_upper": "固定最上",
+                            "fixed_upper_middle": "固定上中",
+                            "fixed_middle": "固定居中",
+                            "fixed_lower_middle": "固定下中",
+                            "fixed_lower": "固定最下",
+                            "swing_upper": "上部摆动",
+                            "swing_upper_middle": "上中摆动",
+                            "swing_middle": "中部摆动",
+                            "swing_lower_middle": "下中摆动",
+                            "swing_lower": "下部摆动"
+                        }
+                    },
+                    "swing_horizontal_mode": {
+                        "state": {
+                            "off": "关闭",
+                            "full": "全幅摆动",
+                            "left": "最左",
+                            "left_center": "左中",
+                            "center": "居中",
+                            "right_center": "右中",
+                            "right": "最右"
                         }
                     }
                 }
